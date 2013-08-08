@@ -27,7 +27,7 @@ class song:
             raise ValueError('You must pass the song dictionary to create a song.')
 
     # Either return the needed playlist data, or run the command to add the song to the jukebox
-    def play(self, jukebox=False):
+    def playSTR(self, jukebox=False):
         """If in jukebox mode, have subsonic add the song to the jukebox playlist. Otherwise return the playlist string"""
         if jukebox:
             subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.song_dict['id']})
@@ -58,10 +58,10 @@ class album:
             raise ValueError('You must pass the album dictionary to create an album.')
 
     # Either return the needed playlist data, or run the command to add the song to the jukebox
-    def play(self, jukebox=False):
+    def playSTR(self, jukebox=False):
         playlist = ""
         for one_song in self.songs:
-            playlist += one_song.play()
+            playlist += one_song.playSTR()
         return playlist
 
     # Implement expected methods
@@ -101,10 +101,10 @@ class artist:
             raise ValueError('You must pass the artist dictionary to create an artist.')
 
     # Either return the needed playlist data, or run the command to add the song to the jukebox
-    def play(self, jukebox=False):
+    def playSTR(self, jukebox=False):
         playlist = ""
         for one_album in self.albums:
-            playlist += one_album.play()
+            playlist += one_album.playSTR()
         return playlist
 
     # Implement expected methods
@@ -128,8 +128,8 @@ class library:
         """Add an artist to the library"""
         self.artists.append(artist(root))
 
-    # Fill ourselves out
     def fillArtists(self, root):
+        """Query the server for all the artists and albums"""
         for one_artist in state.artists:
             listArtist(query=one_artist.attrib['id'], printy=False)
             self.addArtist(state.prevroot)
@@ -138,11 +138,11 @@ class library:
     def __init__(self):
         self.artists = []
 
-    # Either return the needed playlist data, or run the command to add the song to the jukebox
-    def play(self, jukebox=False):
+    def playSTR(self, jukebox=False):
+        """Either return the needed playlist data, or run the command to add the song to the jukebox"""
         playlist = ""
         for one_artist in self.artists:
-            playlist += one_artist.play()
+            playlist += one_artist.playSTR()
         return playlist
 
     # Implement expected methods
@@ -183,20 +183,17 @@ class server:
         self.library = library()
 
     def __str__(self):
-        return "URL:" + server.server + "\nJukebox:" + self.jukebox + "\nParameters: " + str(self.default_params)
+        return "URL: " + self.server + "\nJukebox: " + str(self.jukebox) + "\nParameters: " + str(self.default_params)
 
-    # Use this to check to see if we got a valid result
-    def checkError(self, root, fatal=False):
+    def checkError(self, root):
+        """Use this to check to see if we got a valid result from the subsonic server"""
         if root.attrib['status'] != 'ok':
             print "Error: " + root[0].attrib['message']
-            if fatal:
-                sys.exit(int(root[0].attrib['code']))
-            else:
-                return int(root[0].attrib['code'])
+            return int(root[0].attrib['code'])
         return 0
 
-    # Query subsonic, parse resulting xml and return an ElementTree
-    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, fatal_errors=False):
+    def subRequest(self, page="ping", list_type='subsonic-response', extras={}):
+        """Query subsonic, parse resulting xml and return an ElementTree"""
         params = self.default_params.copy()
         # Add request specific parameters to our hash
         for keys in extras:
@@ -222,7 +219,8 @@ class server:
         # Parse the XML
         root = ET.fromstring(stringres)
         # Make sure the result is valid
-        self.checkError(root, fatal=fatal_errors)
+        if self.checkError(root):
+            return "err"
 
         # Store what type of result this is
         state.idtype = list_type
