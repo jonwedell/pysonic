@@ -38,8 +38,8 @@ parser.add_option("--player", action="store", dest="player", default="/usr/bin/v
 options.history = os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history"))
 
 
-# Pretty print function
 def searchResult(information, printy=False, format_string="Nothing to print", fields=()):
+    """Pretty print function"""
     matches = []
 
     # Go through the XML elements
@@ -133,17 +133,27 @@ def playPrevious(play=False):
     vlc_args = [options.player, "--one-instance"]
     vlc_args.append("--no-playlist-enqueue") if play else vlc_args.append("--playlist-enqueue")
 
-    # TODO: Make the magic happen
-
-    # Close the playlist file
-    playlist.close()
+    # Get the play string
+    playlist = ""
+    for one_server in state.server:
+        res = one_server.library.playSTR()
+        results += res[1]
+        playlist += res[0]
 
     # Make sure there is something to play
-    if results > 0:
-        # Launch the music in VLC
-        subprocess.Popen(vlc_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    else:
-       print "Last command did not result in anything playable."
+    if results == 0:
+        print "Last command did not result in anything playable."
+        return
+
+    # Create the m3u file
+    playlist_file = os.path.join(tempfile.gettempdir(), str(time.time())[-10:-3] + ".m3u")
+    vlc_args.append(playlist_file)
+    playlistf = open(playlist_file, "w")
+    playlistf.write("#EXTM3U\n")
+    playlistf.write(playlist)
+    playlistf.close()
+    # Launch the music in VLC
+    subprocess.Popen(vlc_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
 # Enter python terminal
 def live(arg=None):
@@ -180,18 +190,20 @@ def parseInput(command):
 
     # Interpret the command
     if command == "artist":
-        listArtist(arg, printy=True)
-    elif command == "folder":
-        listFolder(query=arg, printy=True)
-    elif command == "video":
-        listVideo(query=arg, printy=True)
+        for one_server in state.server:
+            print "On server: " + one_server.servername
+            for one_artist in one_server.library.searchArtists(arg):
+                print one_artist.recursivePrint(1)
     elif command == "album":
-        if arg and arg.isdigit():
-            listAlbum(arg, printy=True)
-        else:
-            print "Please specify album ID. Cannot search or list albums."
+        for one_server in state.server:
+            print "On server: " + one_server.servername
+            for one_album in one_server.library.searchAlbums(arg):
+                print one_album.recursivePrint(1)
     elif command == "song":
-        search(arg, printy=True)
+        for one_server in state.server:
+            print "On server: " + one_server.servername
+            for one_song in one_server.library.searchSongs(arg):
+                print one_song
     elif command == "server":
         chooseServer(arg)
     elif command == "now":
@@ -201,15 +213,13 @@ def parseInput(command):
     elif command == "play":
         if arg:
             parseInput(arg)
-            playPrevious(play=True)
+        playPrevious(play=True)
     elif command == "queue":
         if arg:
             parseInput(arg)
-            playPrevious()
+        playPrevious()
     elif command == "live":
         live(arg)
-    elif command == "juke":
-        getJukebox()
     elif command == "write":
         writeMessage(arg)
     elif command == "read":
@@ -274,7 +284,7 @@ for one_server in config.sections():
         sys.stdout.flush()
     except IOError:
         sys.stdout.write("Building library file.")
-        state.artists = curserver.subRequest(page="getArtists", list_type='artist', fatal_errors=True)
+        state.artists = curserver.subRequest(page="getArtists", list_type='artist')
         curserver.library.fillArtists(state.artists)
         pickle.dump(curserver.library, open(curserver.pickle,"w"), 2)
         print ""
