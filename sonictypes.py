@@ -117,7 +117,7 @@ class artist:
 
         if artist_id is not None:
             # Fetch the whole XML tree for this artist
-            artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, root=True).getchildren()
+            artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True).getchildren()
 
             if len(artist_dict) == 1:
                 self.artist_dict = artist_dict[0].attrib
@@ -361,7 +361,7 @@ class server:
             return 'err'
         return 0
 
-    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, root=False):
+    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, retroot=False):
         """Query subsonic, parse resulting xml and return an ElementTree"""
         params = self.default_params.copy()
         # Add request specific parameters to our hash
@@ -373,7 +373,7 @@ class server:
 
         # To stream we only want the URL returned, not the data
         if page == "stream":
-            return self.server+page+"?"+params
+            return self.server_url+page+"?"+params
 
         # Get the server response
         try:
@@ -395,7 +395,7 @@ class server:
             return 'err'
 
         # Short circuit return the whole tree if requested
-        if root:
+        if retroot:
             return root
 
         # Return a list of the elements with the specified type
