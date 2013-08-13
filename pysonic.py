@@ -35,38 +35,18 @@ parser.add_option("--player", action="store", dest="player", default="/usr/bin/v
 
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
-options.history = os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history"))
 
 
-def searchResult(information, printy=False, format_string="Nothing to print", fields=()):
-    """Pretty print function"""
-    matches = []
+def getWidth(used=0):
+    """Get the remaining width of the terminal"""
 
-    # Go through the XML elements
-    for result in information:
-        match = True
-        # Apply filters to this element
-        for tuples in fields:
-            if tuples[1]:
-                if not tuples[1] in result.attrib[tuples[0]].lower():
-                    match = False
-        # If this element passed the filters
-        if match:
-            # Print the result
-            if printy:
-                tuppies = []
-                for x in fields:
-                    # Make sure the result is no longer than the specified maxium length
-                    if len(x)>2:
-                        tuppies.append(result.attrib.get(x[0],'?')[0:x[2]])
-                    # Provide a defualt value if one is missing
-                    else:
-                        tuppies.append(result.attrib.get(x[0],'?'))
-                print format_string % tuple(tuppies)
-            # Add the result
-            matches.append(result)
+    # Only update the width of the terminal every 5 seconds (otherwise we will fork a gazillion processes)
+    if not hasattr(state, 'cols') or state.coltime + 5 < time.time():
+        state.cols = os.popen('stty size', 'r').read().split()[1]
+        state.coltime = time.time()
 
-    state.previous_result = matches
+    # Return the remaining terminal width
+    return int(state.cols)-used
 
 def getMessages():
     """Get chat messages"""
@@ -76,7 +56,7 @@ def getMessages():
         # Convert time from unix time to readable time
         for message in messages:
             message.attrib['time'] = time.ctime(float(message.attrib['time'])/1000).rstrip()
-        searchResult(messages, printy=True, format_string="   At %s %s wrote %s.", fields=(('time',None), ('username',None), ('message',None)))
+            print "   At %s %s wrote %s." % (message.attrib.get('time','?'), message.attrib.get('username','?'), message.attrib.get('message','?'))
 
 def writeMessage(message):
     """Write a chat message"""
@@ -91,8 +71,11 @@ def nowPlaying():
     for one_server in state.server:
         print "On server: " + one_server.servername
         playing = one_server.subRequest(page="getNowPlaying", list_type='entry')
-        searchResult(playing, printy=True, format_string="   %s minutes ago %s played %s by %s (ID:%s)", fields=(('minutesAgo',None), ('username',None), ('title',None), ('artist',None), ('id',None)))
-        state.idtype = 'song'
+        for one_person in playing:
+            print "   %s minutes ago %s played %s by %s (ID:%s)" % \
+                (one_person.attrib.get('minutesAgo','?'), one_person.attrib.get('username','?'), \
+                one_person.attrib.get('title','?'), one_person.attrib.get('artist','?'), one_person.attrib.get('id','?'))
+            one_server.library.getSongById(one_person.attrib['id'])
 
 def stopPlaying():
     """Kill whatever is playing the media"""
@@ -104,23 +87,44 @@ def chooseServer(query=None):
     if query == "all":
         state.server = []
         for one_server in state.all_servers:
-            state.server.append(one_server)
-        print "All servers restored."
+            if not one_server.enabled:
+                one_server.enabled = True
+            if not one_server.online:
+                one_server.goOnline()
+            if one_server.online:
+                state.server.append(one_server)
+        print "Using server(s): " + str(",".join(map(lambda x:x.servername, state.server)))
     elif query:
-        for one_server in state.all_servers:
-            if one_server.servername == query:
-                state.server = [one_server]
-                print "Selected server " + query + "."
-                return
-        print "No matching server! Choose from: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
+        queries = query.split()
+        myres = []
+        serv_hash = {}
+        for x in state.all_servers:
+            serv_hash[x.servername] = x
+        for query in queries:
+            if query in serv_hash:
+                one_server = serv_hash[query]
+                if not one_server.enabled:
+                    one_server.enabled = True
+                if not one_server.online:
+                    one_server.goOnline()
+                if one_server.online:
+                    myres.append(one_server)
+                    print "Selected server " + query + "."
+            else:
+                print "No matching server (" + query + ")! Choose from: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
+        if len(myres) > 0:
+            state.server = myres
+        else:
+            print "No servers matched your results."
+        print "Using server(s): " + str(",".join(map(lambda x:x.servername, state.server)))
     else:
         if len(state.server) == len(state.all_servers):
             print "All servers enabled. Enter a server name to choose that server."
             print "Choose from: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
         else:
             print "Currently active servers: " + str(",".join(map(lambda x:x.servername, state.server)))
-            print "Choose from: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
-            print "Specify 'all' to restore all servers, or enter a server name to choose that server."
+            print "All known servers: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
+            print "Specify 'all' to restore all servers, or enter server names to select."
 
 
 # Play whatever the previous result was
@@ -169,8 +173,12 @@ def live(arg=None):
 # Quit gracefully
 def gracefulExit():
     # Create the history file if it doesn't exist
-    open(options.history, "wa").close()
-    readline.write_history_file(options.history)
+    open(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history")), "wa").close()
+    readline.write_history_file(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history")))
+    config = ""
+    for server in state.all_servers:
+        config += server.printConfig()
+    open(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", "config")), 'w').write(config)
     print " See ya!"
     sys.exit(0)
 
@@ -193,17 +201,27 @@ def parseInput(command):
         for one_server in state.server:
             print "On server: " + one_server.servername
             for one_artist in one_server.library.searchArtists(arg):
-                print one_artist.recursivePrint(1)
+                if arg:
+                    print one_artist.recursivePrint(1)
+                else:
+                    print one_artist.recursivePrint(0)
     elif command == "album":
         for one_server in state.server:
             print "On server: " + one_server.servername
             for one_album in one_server.library.searchAlbums(arg):
-                print one_album.recursivePrint(1)
+                if arg:
+                    print one_album
+                else:
+                    print one_album.recursivePrint(0)
+
     elif command == "song":
         for one_server in state.server:
             print "On server: " + one_server.servername
             for one_song in one_server.library.searchSongs(arg):
-                print one_song
+                if arg:
+                    print one_song
+                else:
+                    print one_song.recursivePrint(0,0)
     elif command == "server":
         chooseServer(arg)
     elif command == "now":
@@ -252,8 +270,6 @@ def parseInput(command):
 class state_obj(object):
     pass
 state = state_obj()
-state.previous_result = []
-state.idtype = "song"
 state.artists = False
 state.prevroot = None
 state.server = []
@@ -270,41 +286,46 @@ if not os.path.isdir(os.path.join(os.path.expanduser("~"),".pysonic")):
 config = ConfigParser.ConfigParser()
 config.read(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", "config")))
 for one_server in config.sections():
-    sys.stdout.write("Loading server " + one_server + ": ")
-    sys.stdout.flush()
-    curserver = server(one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), config.getboolean(one_server, 'jukebox'))
 
-    try:
-        curserver.library = pickle.load(open(curserver.pickle,"rb"))
-        online = curserver.subRequest()
-        # Don't add the server to our server list if it crashes out
-        if online == 'err':
-            continue
-        sys.stdout.write("Done!\n")
+    # Add the new server
+    curserver = server(one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), enabled=config.getboolean(one_server, 'enabled'), jukebox=config.getboolean(one_server, 'jukebox'))
+    state.all_servers.append(curserver)
+
+    if curserver.enabled:
+        sys.stdout.write("Loading server " + curserver.servername + ": ")
         sys.stdout.flush()
-    except IOError:
-        sys.stdout.write("Building library file.")
-        state.artists = curserver.subRequest(page="getArtists", list_type='artist')
-        curserver.library.fillArtists(state.artists)
-        pickle.dump(curserver.library, open(curserver.pickle,"w"), 2)
-        print ""
-    state.server.append(curserver)
+
+        # Try to load the pickel, build the library if neccessary
+        try:
+            curserver.library = pickle.load(open(curserver.pickle,"rb"))
+        except IOError:
+            sys.stdout.write("Building library file.")
+            state.artists = curserver.subRequest(page="getArtists", list_type='artist')
+            curserver.library.fillArtists(state.artists)
+            pickle.dump(curserver.library, open(curserver.pickle,"w"), 2)
+            print ""
+
+        # Make sure the server is online
+        curserver.goOnline()
+    else:
+        print "Loading server " + curserver.servername + ": Disabled."
+
+# Create our backup list of servers
+for one_server in state.all_servers:
+    if one_server.enabled and one_server.online:
+        state.server.append(one_server)
 
 # No valid servers
 if len(state.server) < 1:
     print "No connections established. Do you have at least one server specified in ~/.pysonic/config and are your username, server URL, and password correct?"
     sys.exit(10)
 
-# Create our backup list of servers
-for one_server in state.server:
-    state.all_servers.append(one_server)
-
 # If we made it here then it must be!
 print "Successfully connected. Entering command mode:"
 
 # Load previous command history
-if os.path.exists(options.history):
-    readline.read_history_file(options.history)
+if os.path.exists(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history"))):
+    readline.read_history_file(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history")))
 
 # Enter our loop, let them issue commands!
 while True:
