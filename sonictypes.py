@@ -180,6 +180,10 @@ class library:
     def playSTR(self, mylist=None, jukebox=False):
         """Either return the needed playlist data, or run the command to add the song to the jukebox"""
 
+        # Make sure they have something to play
+        if not hasattr(self,'prev_res') or not self.prev_res:
+            return ("", 0)
+
         res_string = ""
         num_ret = 0
 
@@ -198,7 +202,8 @@ class library:
             playlist = ""
             for one_artist in self.artists:
                 playlist += one_artist.playSTR()
-            return playlist
+                num_ret += 1
+            return (playlist, num_ret)
         else:
             for one_artist in self.artists:
                 one_artist.playSTR()
@@ -349,8 +354,9 @@ class server:
     def checkError(self, root):
         """Use this to check to see if we got a valid result from the subsonic server"""
         if root.attrib['status'] != 'ok':
-            print "Error: " + root[0].attrib['message']
-            return int(root[0].attrib['code'])
+            sys.stdout.write("Error: " + root[0].attrib['message'] + "\n")
+            sys.stdout.flush()
+            return 'err'
         return 0
 
     def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10):
@@ -371,6 +377,8 @@ class server:
         try:
             stringres = urllib2.urlopen(self.server_url+page,params, timeout=timeout).read()
         except urllib2.URLError as e:
+            sys.stdout.write("Error: " + str(e) + "\n")
+            sys.stdout.flush()
             return 'err'
 
         # Parse the XML
@@ -399,8 +407,20 @@ class server:
         # Don't add the server to our server list if it crashes out
         if online == 'err':
             self.online = False
-            sys.stdout.write('No\n')
-        else:
-            self.online = True
-            sys.stdout.write('Yes\n')
+            #sys.stdout.write('No\n')
+            #sys.stdout.flush()
+            return
+
+        self.online = True
+        sys.stdout.write('Yes\n')
         sys.stdout.flush()
+
+        # Try to load the pickel, build the library if neccessary
+        try:
+            self.library = pickle.load(open(self.pickle,"rb"))
+        except IOError:
+            sys.stdout.write("Building library file.")
+            state.artists = self.subRequest(page="getArtists", list_type='artist')
+            self.library.fillArtists(state.artists)
+            pickle.dump(self.library, open(self.pickle,"w"), 2)
+            print ""

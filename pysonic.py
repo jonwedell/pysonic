@@ -27,6 +27,7 @@ import subprocess
 import time
 import cPickle as pickle
 import ConfigParser
+import getpass
 
 # Specify some basic information about our command
 parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
@@ -36,6 +37,11 @@ parser.add_option("--player", action="store", dest="player", default="/usr/bin/v
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
 
+def getHome(filename=None):
+    if filename:
+        return os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic",filename))
+    else:
+        return os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic/"))
 
 def getWidth(used=0):
     """Get the remaining width of the terminal"""
@@ -79,7 +85,7 @@ def nowPlaying():
 
 def stopPlaying():
     """Kill whatever is playing the media"""
-    p = subprocess.Popen(['killall', options.player], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    p = subprocess.Popen([options.player, "--one-instance", "--no-playlist-enqueue", "vlc://quit"], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     p.wait()
 
 def chooseServer(query=None):
@@ -117,6 +123,11 @@ def chooseServer(query=None):
         else:
             print "No servers matched your results."
         print "Using server(s): " + str(",".join(map(lambda x:x.servername, state.server)))
+        # Make sure that only enabled servers are enabled
+        for one_server in state.all_servers:
+            one_server.enabled = False
+        for one_server in state.server:
+            one_server.enabled = True
     else:
         if len(state.server) == len(state.all_servers):
             print "All servers enabled. Enter a server name to choose that server."
@@ -126,9 +137,8 @@ def chooseServer(query=None):
             print "All known servers: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
             print "Specify 'all' to restore all servers, or enter server names to select."
 
-
-# Play whatever the previous result was
 def playPrevious(play=False):
+    """Play whatever the previous result was"""
 
     # Count the number of results
     results = 0
@@ -159,8 +169,8 @@ def playPrevious(play=False):
     # Launch the music in VLC
     subprocess.Popen(vlc_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-# Enter python terminal
 def live(arg=None):
+    """Enter python terminal"""
     if arg:
         exec(arg)
     else:
@@ -170,20 +180,40 @@ def live(arg=None):
         shell = code.InteractiveConsole(vars)
         shell.interact()
 
-# Quit gracefully
 def gracefulExit():
+    """Quit gracefully, saving state"""
     # Create the history file if it doesn't exist
-    open(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history")), "wa").close()
-    readline.write_history_file(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history")))
+    if not os.path.isfile(getHome("history")):
+        open(getHome("history"), "a").close()
+    readline.write_history_file(getHome("history"))
     config = ""
     for server in state.all_servers:
         config += server.printConfig()
-    open(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", "config")), 'w').write(config)
+    open(getHome("config"), 'w').write(config)
     print " See ya!"
     sys.exit(0)
 
-# Parse the input string
+def addServer():
+    """Interactively add a new server"""
+    user_input_maps = {'y':True, 'yes':True, 't':True, 'true':True, 'n':False, 'no':True, 'f':False, 'false':False}
+
+    servername = ''.join(raw_input("Informal name (one word is best): ").split())
+    server_url = raw_input("URL or subsonic username: ")
+    username = raw_input("Username: ")
+    password = getpass.getpass()
+    enabled = user_input_maps.get(raw_input("Enabled (y/n): ").lower(),True)
+    jukebox = user_input_maps.get(raw_input("Jukebox mode (y/n): ").lower(), False)
+
+    curserver = server(servername, username, password, server_url, enabled, jukebox)
+    state.all_servers.append(curserver)
+    if enabled:
+        state.server.append(curserver)
+        sys.stdout.write("Initializing server " + curserver.servername + ": ")
+        sys.stdout.flush()
+        curserver.goOnline()
+
 def parseInput(command):
+    """Parse the command line input"""
 
     arg = False
 
@@ -224,6 +254,8 @@ def parseInput(command):
                     print one_song.recursivePrint(0,0)
     elif command == "server":
         chooseServer(arg)
+    elif command == "addserver":
+        addServer()
     elif command == "now":
         nowPlaying()
     elif command == "silence":
@@ -279,12 +311,12 @@ state.all_servers = []
 execfile("sonictypes.py")
 
 # Make sure the .pysonic folder exists
-if not os.path.isdir(os.path.join(os.path.expanduser("~"),".pysonic")):
-    os.makedirs(os.path.join(os.path.expanduser("~"),".pysonic"))
+if not os.path.isdir(getHome()):
+    os.makedirs(getHome())
 
 # Parse the config file, load (or query) the server data
 config = ConfigParser.ConfigParser()
-config.read(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", "config")))
+config.read(getHome("config"))
 for one_server in config.sections():
 
     # Add the new server
@@ -294,18 +326,6 @@ for one_server in config.sections():
     if curserver.enabled:
         sys.stdout.write("Loading server " + curserver.servername + ": ")
         sys.stdout.flush()
-
-        # Try to load the pickel, build the library if neccessary
-        try:
-            curserver.library = pickle.load(open(curserver.pickle,"rb"))
-        except IOError:
-            sys.stdout.write("Building library file.")
-            state.artists = curserver.subRequest(page="getArtists", list_type='artist')
-            curserver.library.fillArtists(state.artists)
-            pickle.dump(curserver.library, open(curserver.pickle,"w"), 2)
-            print ""
-
-        # Make sure the server is online
         curserver.goOnline()
     else:
         print "Loading server " + curserver.servername + ": Disabled."
@@ -317,15 +337,21 @@ for one_server in state.all_servers:
 
 # No valid servers
 if len(state.server) < 1:
-    print "No connections established. Do you have at least one server specified in ~/.pysonic/config and are your username, server URL, and password correct?"
-    sys.exit(10)
+    if len(config.sections()) > 0:
+        print "No connections established. Do you have at least one server specified in ~/.pysonic/config and are your username, server URL, and password correct?"
+        sys.exit(10)
+    else:
+        print "No configuration file found. Configure a server now."
+        addServer()
 
 # If we made it here then it must be!
 print "Successfully connected. Entering command mode:"
 
 # Load previous command history
-if os.path.exists(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history"))):
-    readline.read_history_file(os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic","history")))
+try:
+    readline.read_history_file(getHome("history"))
+except:
+    pass
 
 # Enter our loop, let them issue commands!
 while True:
