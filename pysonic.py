@@ -302,8 +302,6 @@ def parseInput(command):
 class state_obj(object):
     pass
 state = state_obj()
-state.artists = False
-state.prevroot = None
 state.server = []
 state.all_servers = []
 

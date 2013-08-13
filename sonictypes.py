@@ -110,12 +110,15 @@ class artist:
         for one_album in albums:
             self.albums.append(album(one_album.attrib, server=self.server))
 
-    def __init__(self, artist_dict=None, server=None):
+    def __init__(self, artist_id=None, server=None):
         """We need the dictionary to create an artist."""
         self.albums = []
         self.server = server
-        if artist_dict is not None:
-            artist_dict = artist_dict.getchildren()
+
+        if artist_id is not None:
+            # Fetch the whole XML tree for this artist
+            artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, root=True).getchildren()
+
             if len(artist_dict) == 1:
                 self.artist_dict = artist_dict[0].attrib
                 self.addAlbums(artist_dict[0].getchildren())
@@ -164,13 +167,12 @@ class library:
 
     def addArtist(self, root):
         """Add an artist to the library"""
-        self.artists.append(artist(root, server=self.server))
+        self.artists.append(artist(artist_id, server=self.server))
 
     def fillArtists(self, root):
         """Query the server for all the artists and albums"""
-        for one_artist in state.artists:
-            self.server.subRequest(page="getArtist", list_type='album', extras={'id':one_artist.attrib['id']})
-            self.addArtist(state.prevroot)
+        for one_artist in self.subRequest(page="getArtists", list_type='artist'):
+            self.addArtist(one_artist.attrib['id'])
         self.initialized = True
 
     def __init__(self, server=None):
@@ -359,7 +361,7 @@ class server:
             return 'err'
         return 0
 
-    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10):
+    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, root=False):
         """Query subsonic, parse resulting xml and return an ElementTree"""
         params = self.default_params.copy()
         # Add request specific parameters to our hash
@@ -392,8 +394,9 @@ class server:
         if self.checkError(root):
             return 'err'
 
-        # Store what type of result this is
-        state.prevroot = root
+        # Short circuit return the whole tree if requested
+        if root:
+            return root
 
         # Return a list of the elements with the specified type
         return list(root.getiterator(tag='{http://subsonic.org/restapi}'+list_type))
@@ -407,8 +410,6 @@ class server:
         # Don't add the server to our server list if it crashes out
         if online == 'err':
             self.online = False
-            #sys.stdout.write('No\n')
-            #sys.stdout.flush()
             return
 
         self.online = True
@@ -420,7 +421,6 @@ class server:
             self.library = pickle.load(open(self.pickle,"rb"))
         except IOError:
             sys.stdout.write("Building library file.")
-            state.artists = self.subRequest(page="getArtists", list_type='artist')
             self.library.fillArtists(state.artists)
             pickle.dump(self.library, open(self.pickle,"w"), 2)
             print ""
