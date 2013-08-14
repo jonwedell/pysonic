@@ -32,10 +32,11 @@ import getpass
 # Specify some basic information about our command
 parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
-parser.add_option("--player", action="store", dest="player", default="/usr/bin/vlc", help="Location of media player to queue songs in.")
+#parser.add_option("--player", action="store", dest="player", default="/usr/bin/vlc", help="Location of media player to queue songs in.")
 
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
+options.player = "/usr/bin/vlc"
 
 def getHome(filename=None):
     if filename:
@@ -211,7 +212,12 @@ def addServer():
         sys.stdout.flush()
         curserver.goOnline()
         if curserver.online:
-			state.server.append(curserver)
+            state.server.append(curserver)
+
+def iterServers():
+    for one_server in state.server:
+        print "On server: " + one_server.servername
+        yield one_server
 
 def parseInput(command):
     """Parse the command line input"""
@@ -229,30 +235,33 @@ def parseInput(command):
 
     # Interpret the command
     if command == "artist":
-        for one_server in state.server:
-            print "On server: " + one_server.servername
+        for one_server in iterServers():
             for one_artist in one_server.library.searchArtists(arg):
                 if arg:
                     print one_artist.recursivePrint(1)
                 else:
                     print one_artist.recursivePrint(0)
     elif command == "album":
-        for one_server in state.server:
-            print "On server: " + one_server.servername
+        for one_server in iterServers():
             for one_album in one_server.library.searchAlbums(arg):
                 if arg:
                     print one_album
                 else:
                     print one_album.recursivePrint(0)
-
     elif command == "song":
-        for one_server in state.server:
-            print "On server: " + one_server.servername
+        for one_server in iterServers():
             for one_song in one_server.library.searchSongs(arg):
                 if arg:
                     print one_song
                 else:
                     print one_song.recursivePrint(0,0)
+    elif command == "update":
+        for one_server in iterServers():
+            one_server.library.updateLib()
+    elif command == "rebuild":
+        for one_server in iterServers():
+            os.unlink(getHome(one_server.pickle))
+            one_server.goOnline()
     elif command == "server":
         chooseServer(arg)
     elif command == "addserver":

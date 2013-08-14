@@ -118,15 +118,15 @@ class artist:
         if artist_id is not None:
             # Fetch the whole XML tree for this artist
             artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True)
-            if hasattr(artist_dict, 'getChildren'):
-                artist_dict = artist_dict.getchildren()
-            else:
+
+            if artist_dict == "err":
                 return None
 
             if len(artist_dict) == 1:
                 self.artist_dict = artist_dict[0].attrib
                 self.addAlbums(artist_dict[0].getchildren())
             else:
+                print artist_dict
                 raise ValueError('The root you passed includes more than one artist.')
             # Sort the albums by ID
             self.albums = sorted(self.albums, key=lambda k: k.album_dict.get('id','0'))
@@ -187,11 +187,13 @@ class library:
 
         for one_album in new_albums:
             if not one_album.attrib['artistId'] in self.artist_ids:
-                print "Adding artist " + one_album.attrib['artist']
+                sys.stdout.write("Adding artist " + one_album.attrib['artist'].encode('utf-8') + ": ")
+                sys.stdout.flush()
                 self.addArtist(one_album.attrib['id'])
                 self.updateIDS()
             elif not one_album.attrib['id'] in self.album_ids:
-                print "Adding album " + one_album.attrib['name'] + " to artist " + one_album.attrib['artist']
+                sys.stdout.write("Adding album " + one_album.attrib['name'].encode('utf-8') + " to artist " + one_album.attrib['artist'].encode('utf-8') + ": ")
+                sys.stdout.flush()
                 self.getArtistById(one_album.attrib['artistId']).addAlbums(one_album)
                 self.updateIDS()
 
@@ -376,23 +378,12 @@ class server:
         self.pickle = os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", self.servername + ".pickle"))
         self.library = library(server=self)
 
-    def __str__(self):
-        return "URL: " + self.server_url + "\nJukebox: " + str(self.jukebox) + "\nParameters: " + str(self.default_params)
-
-    def printName(self):
-        return "On server " + self.servername + ":\n"
-
     def printConfig(self):
         return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.servername, self.server_url, self.default_params['u'], \
                 self.default_params['p'], str(self.jukebox), str(self.enabled))
 
-    def checkError(self, root):
-        """Use this to check to see if we got a valid result from the subsonic server"""
-        if root.attrib['status'] != 'ok':
-            sys.stdout.write("Error: " + root[0].attrib['message'] + "\n")
-            sys.stdout.flush()
-            return 'err'
-        return 0
+    def __str__(self):
+        return self.printConfig()
 
     def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, retroot=False):
         """Query subsonic, parse resulting xml and return an ElementTree"""
@@ -427,7 +418,9 @@ class server:
             print root
 
         # Make sure the result is valid
-        if self.checkError(root):
+        if root.attrib['status'] != 'ok':
+            sys.stdout.write("Error: " + root[0].attrib['message'] + "\n")
+            sys.stdout.flush()
             return 'err'
 
         # Short circuit return the whole tree if requested
@@ -438,7 +431,7 @@ class server:
         return list(root.getiterator(tag='{http://subsonic.org/restapi}'+list_type))
 
     def goOnline(self):
-        """Ping the server to ensure it is online"""
+        """Ping the server to ensure it is online, if it is load the pickle or generate the local cache if necessary"""
         sys.stdout.write("Checking if server " + self.servername + " is online: ")
         sys.stdout.flush()
         online = self.subRequest(timeout=2)
@@ -456,7 +449,7 @@ class server:
         try:
             self.library = pickle.load(open(self.pickle,"rb"))
         except IOError:
-            sys.stdout.write("Building library file.")
+            sys.stdout.write("Building library.")
             self.library.fillArtists()
             pickle.dump(self.library, open(self.pickle,"w"), 2)
             print ""
