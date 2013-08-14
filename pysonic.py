@@ -278,6 +278,7 @@ def parseInput(command):
         getMessages()
     elif command == "help" or command == "h":
         print "Commands:"
+        print "   'addserver' - interactively add a new server."
         print "   'artist' - display all artists."
         print "   'artist ID' - display albums of artist ID."
         print "   'artist query' - display albums of artists which contain 'query'."
@@ -292,6 +293,7 @@ def parseInput(command):
         print "   'write message' - Writes message to the subsonic chat."
         print "   'read' - Displays subsonic chat messages."
         print "   'silence' - stop anything that is currently playing."
+        print "   'server' - switch active servers. Run with no args for help."
         print "   'quit' or 'q' - exit the CLI."
     elif command == "quit" or command == "q":
         gracefulExit()
