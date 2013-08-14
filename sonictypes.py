@@ -117,7 +117,11 @@ class artist:
 
         if artist_id is not None:
             # Fetch the whole XML tree for this artist
-            artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True).getchildren()
+            artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True)
+            if hasattr(artist_dict, 'getChildren'):
+                artist_dict = artist_dict.getchildren()
+            else:
+                return None
 
             if len(artist_dict) == 1:
                 self.artist_dict = artist_dict[0].attrib
@@ -167,7 +171,29 @@ class library:
 
     def addArtist(self, artist_id):
         """Add an artist to the library"""
-        self.artists.append(artist(artist_id, server=self.server))
+        new_artist = artist(artist_id, server=self.server)
+        if new_artist:
+            self.artists.append(new_artist)
+
+    def updateIDS(self):
+        self.album_ids = map(lambda x:x.album_dict['id'], self.getAlbums())
+        self.artist_ids = map(lambda x:x.artist_dict['id'], self.getArtists())
+
+    def updateLib(self):
+        """Check for new albums and artists"""
+
+        self.updateIDS()
+        new_albums = self.server.subRequest(page="getAlbumList2", list_type='album', extras={'type':'newest', 'size':500})
+
+        for one_album in new_albums:
+            if not one_album.attrib['artistId'] in self.artist_ids:
+                print "Adding artist " + one_album.attrib['artist']
+                self.addArtist(one_album.attrib['id'])
+                self.updateIDS()
+            elif not one_album.attrib['id'] in self.album_ids:
+                print "Adding album " + one_album.attrib['name'] + " to artist " + one_album.attrib['artist']
+                self.getArtistById(one_album.attrib['artistId']).addAlbums(one_album)
+                self.updateIDS()
 
     def fillArtists(self):
         """Query the server for all the artists and albums"""
@@ -248,6 +274,13 @@ class library:
                 self.prev_res = [one_song]
                 return one_song
         self.prev_res = []
+        return None
+
+    def getArtistById(self, artist_id):
+        """Return an artist based on ID"""
+        for one_artist in self.getArtists():
+            if one_artist.artist_dict['id'] == artist_id:
+                return one_artist
         return None
 
     def searchSongs(self, search=None):
@@ -373,7 +406,10 @@ class server:
 
         # To stream we only want the URL returned, not the data
         if page == "stream":
-			return self.server_url+page+"?"+params
+            return self.server_url+page+"?"+params
+
+        if options.verbose:
+            print self.server_url+page+"?"+params
 
         # Get the server response
         try:

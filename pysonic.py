@@ -207,10 +207,11 @@ def addServer():
     curserver = server(servername, username, password, server_url, enabled, jukebox)
     state.all_servers.append(curserver)
     if enabled:
-        state.server.append(curserver)
         sys.stdout.write("Initializing server " + curserver.servername + ": ")
         sys.stdout.flush()
         curserver.goOnline()
+        if curserver.online:
+			state.server.append(curserver)
 
 def parseInput(command):
     """Parse the command line input"""
