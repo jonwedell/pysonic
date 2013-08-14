@@ -165,13 +165,13 @@ class library:
     artists = []
     initialized = False
 
-    def addArtist(self, root):
+    def addArtist(self, artist_id):
         """Add an artist to the library"""
         self.artists.append(artist(artist_id, server=self.server))
 
-    def fillArtists(self, root):
+    def fillArtists(self):
         """Query the server for all the artists and albums"""
-        for one_artist in self.subRequest(page="getArtists", list_type='artist'):
+        for one_artist in self.server.subRequest(page="getArtists", list_type='artist'):
             self.addArtist(one_artist.attrib['id'])
         self.initialized = True
 
@@ -346,7 +346,7 @@ class server:
     def __str__(self):
         return "URL: " + self.server_url + "\nJukebox: " + str(self.jukebox) + "\nParameters: " + str(self.default_params)
 
-    def printName():
+    def printName(self):
         return "On server " + self.servername + ":\n"
 
     def printConfig(self):
@@ -373,7 +373,7 @@ class server:
 
         # To stream we only want the URL returned, not the data
         if page == "stream":
-            return self.server_url+page+"?"+params
+			return self.server_url+page+"?"+params
 
         # Get the server response
         try:
@@ -416,11 +416,11 @@ class server:
         sys.stdout.write('Yes\n')
         sys.stdout.flush()
 
-        # Try to load the pickel, build the library if neccessary
+        # Try to load the pickle, build the library if neccessary
         try:
             self.library = pickle.load(open(self.pickle,"rb"))
         except IOError:
             sys.stdout.write("Building library file.")
-            self.library.fillArtists(state.artists)
+            self.library.fillArtists()
             pickle.dump(self.library, open(self.pickle,"w"), 2)
             print ""
