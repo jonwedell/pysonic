@@ -247,19 +247,7 @@ def parseInput(command):
                     print one_album.recursivePrint(0)
     elif command == "song":
         for one_server in iterServers():
-            if arg:
-                if getWidth() >= 80:
-                    print "%-6s %-5s %-5s %-20s %-20s %-19s" % ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist")
-                    for one_song in one_server.library.searchSongs(arg):
-                        print one_song.getDetails()
-                else:
-                    print "For optimal song display, please resize terminal to be at least 80 characters wide."
-                    for one_song in one_server.library.searchSongs(arg):
-                        print one_song
-            else:
-                for one_song in one_server.library.searchSongs(arg):
-                    print one_song.recursivePrint(0,0)
-
+            one_server.library.songCMD(arg)
     elif command == "update":
         for one_server in iterServers():
             one_server.library.updateLib()
@@ -610,6 +598,29 @@ class library:
 
         self.prev_res = res
         return res
+
+    def songCMD(self, arg=None):
+        """Process a song command"""
+        results = one_server.library.searchSongs(arg)
+
+        # If they want all songs, only print the song names
+        if not arg:
+            for one_song in results:
+                print one_song.recursivePrint(0,0)
+
+        # There is a query
+        if arg:
+            if len(results) == 0:
+                print "No songs matched your query."
+                return
+            if getWidth() >= 80:
+                print "%-6s %-5s %-5s %-20s %-20s %-19s" % ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist")
+                for one_song in results:
+                    print one_song.getDetails()
+            else:
+                print "For optimal song display, please resize terminal to be at least 80 characters wide."
+                for one_song in results:
+                    print one_song
 
     def searchAlbums(self, search=None):
         """Search through albums names or ids for the query"""
