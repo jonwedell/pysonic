@@ -15,19 +15,19 @@ Coded by Jon Wedell
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+import os
 import sys
+import time
 import urllib
 import urllib2
-import xml.etree.ElementTree as ET
-from optparse import OptionParser, OptionGroup
+import getpass
 import readline
 import tempfile
-import os
 import subprocess
-import time
-import cPickle as pickle
 import ConfigParser
-import getpass
+import cPickle as pickle
+import xml.etree.ElementTree as ET
+from optparse import OptionParser, OptionGroup
 
 def getHome(filename=None):
     if filename:
@@ -127,7 +127,7 @@ def chooseServer(query=None):
         else:
             print "Currently active servers: " + str(",".join(map(lambda x:x.servername, state.server)))
             print "All known servers: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
-            print "Specify 'all' to restore all servers, or enter server names to select."
+            print "Specify 'all' to restore all servers, or enter server names (space delimited) to select."
 
 def playPrevious(play=False):
     """Play whatever the previous result was"""
@@ -158,30 +158,35 @@ def playPrevious(play=False):
     playlistf.write("#EXTM3U\n")
     playlistf.write(playlist)
     playlistf.close()
+
     # Launch the music in VLC
     subprocess.Popen(vlc_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
 def live(arg=None):
     """Enter python terminal"""
-    if arg:
+    if not arg is None:
         exec(arg)
     else:
         import code
-        vars = globals().copy()
+        vars = globals()
         vars.update(locals())
         shell = code.InteractiveConsole(vars)
         shell.interact()
 
 def gracefulExit():
     """Quit gracefully, saving state"""
+
     # Create the history file if it doesn't exist
     if not os.path.isfile(getHome("history")):
         open(getHome("history"), "a").close()
     readline.write_history_file(getHome("history"))
+
+    # Write the current servers to the config file
     config = ""
     for server in state.all_servers:
         config += server.printConfig()
     open(getHome("config"), 'w').write(config)
+
     print " See ya!"
     sys.exit(0)
 
@@ -221,7 +226,7 @@ def parseInput(command):
         arg = command[command.index(' ')+1:]
         command = command[:command.index(' ')]
 
-    # Display how we interpreted the command
+    # Display how we parsed the command
     if options.verbose:
         print str(command)+":"+str(arg)
 
@@ -294,7 +299,7 @@ def parseInput(command):
         print "   'read' - Displays subsonic chat messages."
         print "   'silence' - stop anything that is currently playing."
         print "   'server' - switch active servers. Run with no args for help."
-        print "   'quit' or 'q' - exit the CLI."
+        print "   'quit', 'q', or ctrl-d - exit the CLI."
     elif command == "quit" or command == "q":
         gracefulExit()
     elif command == "":
@@ -303,7 +308,6 @@ def parseInput(command):
         print "Invalid command '" + command + "'. Type 'help' for help."
 
 
-# A song!
 class song:
     """This class implements the logical concept of a song."""
     song_dict = None
@@ -321,13 +325,15 @@ class song:
         if self.server.jukebox:
             self.server.subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.song_dict['id']})
         else:
-            return "#EXTINF:" + self.song_dict.get('duration','?').encode('utf-8') + ',' + self.song_dict.get('artist','?').encode('utf-8') + ' - ' + self.song_dict.get('title','?').encode('utf-8') + "\n" + self.server.subRequest(page="stream", extras={'id':self.song_dict['id']}) + "\n"
+            return "#EXTINF:" + self.song_dict.get('duration','?').encode('utf-8') + ',' + \
+            self.song_dict.get('artist','?').encode('utf-8') + ' - ' + self.song_dict.get('title','?').encode('utf-8') +\
+             "\n" + self.server.subRequest(page="stream", extras={'id':self.song_dict['id']}) + "\n"
 
     def __str__(self):
         return "%-3s: %s\n   %-4s: %s\n      %-5s: %s" % \
-                                                (self.song_dict.get('artistId','?').encode('utf-8'), self.song_dict.get('artist','?').encode('utf-8')[0:getWidth(5)],\
-                                                self.song_dict.get('albumId','?').encode('utf-8'), self.song_dict.get('album','?').encode('utf-8')[0:getWidth(9)],\
-                                                self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(13)])
+                (self.song_dict.get('artistId','?').encode('utf-8'), self.song_dict.get('artist','?').encode('utf-8')[0:getWidth(5)],\
+                self.song_dict.get('albumId','?').encode('utf-8'), self.song_dict.get('album','?').encode('utf-8')[0:getWidth(9)],\
+                self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(13)])
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
@@ -336,7 +342,7 @@ class song:
             res = "   "*indentations + res
         return res % (self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(7+3*indentations)])
 
-# An album!
+
 class album:
     """This class implements the logical concept of an album."""
     album_dict = None
@@ -389,7 +395,6 @@ class album:
         return "%-3s: %s\n" % (self.album_dict.get('artistId','?').encode('utf-8'), self.album_dict.get('artist','?').encode('utf-8')[0:getWidth(5)]) + self.recursivePrint(1,1)
 
 
-# An artist!
 class artist:
     """This class implements the logical concept of an artist."""
     artist_dict = None
@@ -453,11 +458,17 @@ class artist:
     def __str__(self):
         return self.recursivePrint(0)
 
-# A list of artists!
+
 class library:
     """This class implements the logical concept of a library."""
     artists = []
     initialized = False
+
+    def __init__(self, server=None):
+        if server is None:
+            raise ValueError("You must specify a corresponding server for this library.")
+        self.artists = []
+        self.server = server
 
     def addArtist(self, artist_id):
         """Add an artist to the library"""
@@ -492,10 +503,6 @@ class library:
         for one_artist in self.server.subRequest(page="getArtists", list_type='artist'):
             self.addArtist(one_artist.attrib['id'])
         self.initialized = True
-
-    def __init__(self, server=None):
-        self.artists = []
-        self.server = server
 
     def playSTR(self, mylist=None, jukebox=False):
         """Either return the needed playlist data, or run the command to add the song to the jukebox"""
@@ -635,11 +642,13 @@ class library:
     def __str__(self):
         return self.recursivePrint(1,-1)
 
-# A server!
+
 class server:
     """This class represents a server. It stores the password and makes queries."""
 
     def __init__(self, servername, username, password, server_url, enabled=True, jukebox=False):
+        """A server object"""
+
         # Build the default parameters into a reusable hash
         self.default_params = {
           'u': username,
@@ -669,6 +678,7 @@ class server:
         self.library = library(server=self)
 
     def printConfig(self):
+        """Return a string corresponding the the config file format for this server"""
         return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.servername, self.server_url, self.default_params['u'], \
                 self.default_params['p'], str(self.jukebox), str(self.enabled))
 
@@ -677,10 +687,10 @@ class server:
 
     def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, retroot=False):
         """Query subsonic, parse resulting xml and return an ElementTree"""
-        params = self.default_params.copy()
+
         # Add request specific parameters to our hash
-        for keys in extras:
-            params[keys] = extras[keys]
+        params = self.default_params.copy()
+        params.update(extras)
 
         # Encode our parameters and send the request
         params = urllib.urlencode(params)
