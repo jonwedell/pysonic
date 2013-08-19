@@ -164,7 +164,7 @@ def playPrevious(play=False):
 
 def live(arg=None):
     """Enter python terminal"""
-    if not arg is None:
+    if arg:
         exec(arg)
     else:
         import code
