@@ -247,11 +247,19 @@ def parseInput(command):
                     print one_album.recursivePrint(0)
     elif command == "song":
         for one_server in iterServers():
-            for one_song in one_server.library.searchSongs(arg):
-                if arg:
-                    print one_song
+            if arg:
+                if getWidth() >= 80:
+                    print "%-6s %-5s %-5s %-20s %-20s %-19s" % ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist")
+                    for one_song in one_server.library.searchSongs(arg):
+                        print one_song.getDetails()
                 else:
+                    print "For optimal song display, please resize terminal to be at least 80 characters wide."
+                    for one_song in one_server.library.searchSongs(arg):
+                        print one_song
+            else:
+                for one_song in one_server.library.searchSongs(arg):
                     print one_song.recursivePrint(0,0)
+
     elif command == "update":
         for one_server in iterServers():
             one_server.library.updateLib()
@@ -334,6 +342,10 @@ class song:
                 (self.song_dict.get('artistId','?').encode('utf-8'), self.song_dict.get('artist','?').encode('utf-8')[0:getWidth(5)],\
                 self.song_dict.get('albumId','?').encode('utf-8'), self.song_dict.get('album','?').encode('utf-8')[0:getWidth(9)],\
                 self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(13)])
+
+    def getDetails(self):
+        """Print in a columnar mode that works well with multiple songs"""
+        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (self.song_dict.get('id',"?"), self.song_dict.get('albumId',"?"), self.song_dict.get('artistId',"?"), self.song_dict.get('title',"?")[:20], self.song_dict.get('album',"?")[:20], self.song_dict.get('artist',"?")[:19])
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
