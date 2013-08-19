@@ -233,21 +233,13 @@ def parseInput(command):
     # Interpret the command
     if command == "artist":
         for one_server in iterServers():
-            for one_artist in one_server.library.searchArtists(arg):
-                if arg:
-                    print one_artist.recursivePrint(1)
-                else:
-                    print one_artist.recursivePrint(0)
+            one_server.library.searchArtists(arg)
     elif command == "album":
         for one_server in iterServers():
-            for one_album in one_server.library.searchAlbums(arg):
-                if arg:
-                    print one_album
-                else:
-                    print one_album.recursivePrint(0)
+            one_server.library.searchAlbums(arg)
     elif command == "song":
         for one_server in iterServers():
-            one_server.library.songCMD(arg)
+            one_server.library.searchSongs(arg)
     elif command == "update":
         for one_server in iterServers():
             one_server.library.updateLib()
@@ -597,29 +589,25 @@ class library:
             res = self.getSongs()
 
         self.prev_res = res
-        return res
 
-    def songCMD(self, arg=None):
-        """Process a song command"""
-        results = one_server.library.searchSongs(arg)
 
         # If they want all songs, only print the song names
-        if not arg:
-            for one_song in results:
+        if not search:
+            for one_song in res:
                 print one_song.recursivePrint(0,0)
 
         # There is a query
-        if arg:
-            if len(results) == 0:
+        if search:
+            if len(res) == 0:
                 print "No songs matched your query."
                 return
             if getWidth() >= 80:
                 print "%-6s %-5s %-5s %-20s %-20s %-19s" % ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist")
-                for one_song in results:
+                for one_song in res:
                     print one_song.getDetails()
             else:
                 print "For optimal song display, please resize terminal to be at least 80 characters wide."
-                for one_song in results:
+                for one_song in res:
                     print one_song
 
     def searchAlbums(self, search=None):
@@ -637,7 +625,16 @@ class library:
             res = self.getAlbums()
 
         self.prev_res = res
-        return res
+
+        # Print the results
+        if len(res) == 0:
+            print "No albums matched your query."
+            return
+        for one_album in res:
+            if search:
+                print one_album
+            else:
+                print one_album.recursivePrint(0)
 
     def searchArtists(self, search=None):
         """Search through artists names or ids for the query"""
@@ -655,7 +652,16 @@ class library:
             res = self.getArtists()
 
         self.prev_res = res
-        return res
+
+        # Print the results
+        if len(res) == 0:
+            print "No artists matched your query."
+            return
+        for one_artist in res:
+            if search:
+                print one_artist.recursivePrint(1)
+            else:
+                print one_artist.recursivePrint(0)
 
     # Implement expected methods
     def __iter__(self):
