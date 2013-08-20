@@ -93,7 +93,7 @@ def chooseServer(query=None):
                 state.server.append(one_server)
         print "Using server(s): " + str(",".join(map(lambda x:x.servername, state.server)))
     elif query:
-        queries = query.split()
+        queries = query.replace(","," ").split()
         myres = []
         serv_hash = {}
         for x in state.all_servers:
@@ -127,7 +127,7 @@ def chooseServer(query=None):
         else:
             print "Currently active servers: " + str(",".join(map(lambda x:x.servername, state.server)))
             print "All known servers: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
-            print "Specify 'all' to restore all servers, or enter server names (space delimited) to select."
+            print "Type 'server all' to restore all servers, or enter server names (space delimited) to select."
 
 def playPrevious(play=False):
     """Play whatever the previous result was"""
@@ -247,6 +247,12 @@ def parseInput(command):
         for one_server in iterServers():
             os.unlink(getHome(one_server.pickle))
             one_server.goOnline()
+    elif command == "new":
+        for one_server in iterServers():
+            one_server.library.getSpecialAlbums()
+    elif command == "random":
+        for one_server in iterServers():
+            one_server.library.getSpecialAlbums(albtype='random')
     elif command == "server":
         chooseServer(arg)
     elif command == "addserver":
@@ -283,7 +289,9 @@ def parseInput(command):
         print "   'queue' - queue results of previous search."
         print "   'queue artist|album|song query|ID' - queue whatever the artist, album, or song query turns up."
         print "   'now' - shows who is currently listening to what."
+        print "   'new' - prints the last 10 albums added to the server."
         print "   'write message' - Writes message to the subsonic chat."
+        print "   'random' - prints a random list of 10 albums from the server."
         print "   'read' - Displays subsonic chat messages."
         print "   'silence' - stop anything that is currently playing."
         print "   'server' - switch active servers. Run with no args for help."
@@ -377,6 +385,9 @@ class album:
             for one_song in self.songs:
                 res += "\n" + one_song.recursivePrint(level-1, indentations+1)
         return res % (self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(6+3*indentations)])
+
+    def specialPrint(self):
+        return "%-3s: %-20s %-s: %-3s" % (self.album_dict.get('artistId','?').encode('utf-8'), self.album_dict.get('artist','?').encode('utf-8')[0:20], self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(31)])
 
     # Implement expected methods
     def __iter__(self):
@@ -574,6 +585,13 @@ class library:
                 return one_artist
         return None
 
+    def getAlbumById(self, album_id):
+        """Return an artist based on ID"""
+        for one_album in self.getAlbums():
+            if one_album.album_dict['id'] == album_id:
+                return one_album
+        return None
+
     def searchSongs(self, search=None):
         """Search through song names or ids for the query"""
         if search:
@@ -662,6 +680,18 @@ class library:
                 print one_artist.recursivePrint(1)
             else:
                 print one_artist.recursivePrint(0)
+
+    def getSpecialAlbums(self, albtype='newest'):
+        """Returns either 10 new or random albums"""
+        # TODO: Implement random from built in library rather than using server request
+        albs = self.server.subRequest(page="getAlbumList2", list_type='album',extras={'type':albtype})
+        res = []
+        for item in albs:
+            res.append(self.getAlbumById(item.attrib['id']))
+            if not res[-1] is None:
+                print res[-1].specialPrint()
+        self.prev_res = res
+
 
     # Implement expected methods
     def __iter__(self):
