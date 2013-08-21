@@ -727,7 +727,7 @@ class library:
                 number = len(albums)
             res = random.sample(albums,number)
         elif albtype == 'newest':
-            res = sorted(self.getAlbums(), key=lambda k:k.album_dict.get('created','?'))[-number:]
+            res = reversed(sorted(self.getAlbums(), key=lambda k:k.album_dict.get('created','?'))[-number:])
         else:
             raise ValueError("Invalid type to search for.")
 
