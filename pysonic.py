@@ -333,14 +333,15 @@ class song:
 
     def getDetails(self):
         """Print in a columnar mode that works well with multiple songs"""
+        print len(self.song_dict.get('title',"?")[:20]), len(self.song_dict.get('album',"?")[:20])
         return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (self.song_dict.get('id',"?"), self.song_dict.get('albumId',"?"), self.song_dict.get('artistId',"?"), self.song_dict.get('title',"?")[:20], self.song_dict.get('album',"?")[:20], self.song_dict.get('artist',"?")[:19])
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
-        res = "%-5s: %s"
+        res = "%-5s: %s" % (self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(7+3*indentations)])
         if indentations > 0:
             res = "   "*indentations + res
-        return res % (self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(7+3*indentations)])
+        return res
 
 
 class album:
@@ -378,16 +379,16 @@ class album:
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
-        res = "%-4s: %s"
+        res = "%-4s: %s" % (self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(6+3*indentations)])
         if indentations > 0:
             res = "   "*indentations + res
         if level > 0:
             for one_song in self.songs:
                 res += "\n" + one_song.recursivePrint(level-1, indentations+1)
-        return res % (self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(6+3*indentations)])
+        return res
 
     def specialPrint(self):
-        return "%-3s: %-20s %-s: %-3s" % (self.album_dict.get('artistId','?').encode('utf-8'), self.album_dict.get('artist','?').encode('utf-8')[0:20], self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(31)])
+        return "%-3s: %-20s %-3s: %-3s" % (self.album_dict.get('artistId','?').encode('utf-8'), self.album_dict.get('artist','?').encode('utf-8')[0:20], self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(31)])
 
     # Implement expected methods
     def __iter__(self):
@@ -445,13 +446,13 @@ class artist:
 
     def recursivePrint(self, level=3, indentations=0):
         """Prints children up to level n"""
-        res = "%-3s: %s"
+        res = "%-3s: %s" % (self.artist_dict.get('id','?').encode('utf-8'), self.artist_dict.get('name','?').encode('utf-8')[0:getWidth(5+3*indentations)])
         if indentations > 0:
             res = "   "*indentations + res
         if level > 0:
             for one_album in self.albums:
                 res += "\n" + one_album.recursivePrint(level-1, indentations+1)
-        return res % (self.artist_dict.get('id','?').encode('utf-8'), self.artist_dict.get('name','?').encode('utf-8')[0:getWidth(5+3*indentations)])
+        return res
 
     # Implement expected methods
     def __iter__(self):
