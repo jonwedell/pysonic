@@ -127,7 +127,7 @@ def chooseServer(query=None):
         else:
             print "Currently active servers: " + str(",".join(map(lambda x:x.servername, state.server)))
             print "All known servers: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
-            print "Type 'server all' to restore all servers, or enter server names (space delimited) to select."
+            print "Type 'server all' to restore all servers, or enter server names to select."
 
 def playPrevious(play=False):
     """Play whatever the previous result was"""
@@ -808,6 +808,7 @@ class server:
         try:
             self.library = pickle.load(open(self.pickle,"rb"))
         except IOError:
+            self.library = library(self)
             sys.stdout.write("Building library.")
             self.library.fillArtists()
             pickle.dump(self.library, open(self.pickle,"w"), 2)
