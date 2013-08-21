@@ -316,6 +316,10 @@ class song:
         else:
             raise ValueError('You must pass the song dictionary to create a song.')
 
+    def updateServer(self, server):
+        """Update the server this song is linked to"""
+        self.server = server
+
     def playSTR(self):
         """If in jukebox mode, have subsonic add the song to the jukebox playlist. Otherwise return the playlist string"""
         if self.server.jukebox:
@@ -364,6 +368,12 @@ class album:
         else:
             raise ValueError('You must pass the album dictionary to create an album.')
 
+    def updateServer(self, server):
+        """Update the server this album is linked to"""
+        self.server = server
+        for one_song in self.songs:
+            one_song.updateServer(server)
+
     def playSTR(self):
         """Either return the needed playlist data, or run the command to add the song to the jukebox"""
 
@@ -407,6 +417,12 @@ class artist:
         """Add any number of albums to the artist"""
         for one_album in albums:
             self.albums.append(album(one_album.attrib, server=self.server))
+
+    def updateServer(self, server):
+        """Update the server this artist is linked to"""
+        self.server = server
+        for one_album in self.albums:
+            one_album.updateServer(server)
 
     def __init__(self, artist_id=None, server=None):
         """We need the dictionary to create an artist."""
@@ -472,6 +488,12 @@ class library:
             raise ValueError("You must specify a corresponding server for this library.")
         self.artists = []
         self.server = server
+
+    def updateServer(self, server):
+        """Update the server this library is linked to"""
+        self.server = server
+        for one_artist in self.artists:
+            one_artist.updateServer(server)
 
     def addArtist(self, artist_id):
         """Add an artist to the library"""
@@ -811,8 +833,11 @@ class server:
             self.library = library(self)
             sys.stdout.write("Building library.")
             self.library.fillArtists()
+            self.library.updateServer(None)
             pickle.dump(self.library, open(self.pickle,"w"), 2)
             print ""
+        # Update the server that the songs use
+        self.library.updateServer(self)
 
 
 ########################################################################
