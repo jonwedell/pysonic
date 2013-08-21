@@ -360,7 +360,7 @@ class album:
             for one_song in songs:
                 self.songs.append(song(one_song.attrib, server=self.server))
             # Sort the songs by track number
-            self.songs = sorted(self.songs, key=lambda k: k.song_dict.get('track','0'))
+            self.songs.sort(key=lambda k: int(k.song_dict.get('track','0')))
         else:
             raise ValueError('You must pass the album dictionary to create an album.')
 
@@ -427,7 +427,7 @@ class artist:
                 print artist_dict
                 raise ValueError('The root you passed includes more than one artist.')
             # Sort the albums by ID
-            self.albums = sorted(self.albums, key=lambda k: k.album_dict.get('id','0'))
+            self.albums.sort(key=lambda k: int(k.album_dict.get('id','0')))
         else:
             raise ValueError('You must pass the artist dictionary to create an artist.')
 
