@@ -18,6 +18,7 @@ Coded by Jon Wedell
 import os
 import sys
 import time
+import stat
 import random
 import urllib
 import urllib2
@@ -41,7 +42,14 @@ def getWidth(used=0):
 
     # Only update the width of the terminal every 5 seconds (otherwise we will fork a gazillion processes)
     if not hasattr(state, 'cols') or state.coltime + 5 < time.time():
-        state.cols = os.popen('stty size', 'r').read().split()[1]
+
+        # Check if we are outputting to a terminal style device
+        mode = os.fstat(0).st_mode
+        if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
+            state.cols = 10000
+        else:
+            state.cols = os.popen('stty size', 'r').read().split()[1]
+        # Update the setting time
         state.coltime = time.time()
 
     # Return the remaining terminal width
@@ -914,6 +922,13 @@ try:
     readline.read_history_file(getHome("history"))
 except:
     pass
+
+# Execute piped-in commands if there are any
+mode = os.fstat(0).st_mode
+if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
+    for line in sys.stdin.readlines():
+        parseInput(line.rstrip())
+    sys.exit(0)
 
 # Enter our loop, let them issue commands!
 while True:
