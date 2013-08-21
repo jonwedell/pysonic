@@ -333,7 +333,6 @@ class song:
 
     def getDetails(self):
         """Print in a columnar mode that works well with multiple songs"""
-        print len(self.song_dict.get('title',"?")[:20]), len(self.song_dict.get('album',"?")[:20])
         return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (self.song_dict.get('id',"?"), self.song_dict.get('albumId',"?"), self.song_dict.get('artistId',"?"), self.song_dict.get('title',"?")[:20], self.song_dict.get('album',"?")[:20], self.song_dict.get('artist',"?")[:19])
 
     def recursivePrint(self, level=5, indentations=0):
