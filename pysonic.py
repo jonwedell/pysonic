@@ -18,6 +18,7 @@ Coded by Jon Wedell
 import os
 import sys
 import time
+import random
 import urllib
 import urllib2
 import getpass
@@ -249,10 +250,10 @@ def parseInput(command):
             one_server.goOnline()
     elif command == "new":
         for one_server in iterServers():
-            one_server.library.getSpecialAlbums()
+            one_server.library.getSpecialAlbums(number=arg)
     elif command == "random":
         for one_server in iterServers():
-            one_server.library.getSpecialAlbums(albtype='random')
+            one_server.library.getSpecialAlbums(albtype='random',number=arg)
     elif command == "server":
         chooseServer(arg)
     elif command == "addserver":
@@ -703,17 +704,28 @@ class library:
             else:
                 print one_artist.recursivePrint(0)
 
-    def getSpecialAlbums(self, albtype='newest'):
-        """Returns either 10 new or random albums"""
-        # TODO: Implement random from built in library rather than using server request
-        albs = self.server.subRequest(page="getAlbumList2", list_type='album',extras={'type':albtype})
-        res = []
-        for item in albs:
-            res.append(self.getAlbumById(item.attrib['id']))
-            if not res[-1] is None:
-                print res[-1].specialPrint()
-        self.prev_res = res
+    def getSpecialAlbums(self, albtype='newest', number=10):
+        """Returns either new or random albums"""
 
+        # Process the supplied number
+        if not number or not number.isdigit():
+            number = 10
+        else:
+            number = int(number)
+
+        if albtype == 'random':
+            albums = self.getAlbums()
+            if len(albums) < number:
+                number = len(albums)
+            res = random.sample(albums,number)
+        elif albtype == 'newest':
+            res = sorted(self.getAlbums(), key=lambda k:k.album_dict.get('created','?'))[-number:]
+        else:
+            raise ValueError("Invalid type to search for.")
+
+        self.prev_res = res
+        for item in self.prev_res:
+            print item.specialPrint()
 
     # Implement expected methods
     def __iter__(self):
