@@ -37,6 +37,42 @@ def getHome(filename=None):
     else:
         return os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic/"))
 
+def getLock():
+    lockfile = getHome("lock")
+
+    # If there is a lockfile, see if it is stale
+    if os.path.isfile(lockfile):
+        pid = open(lockfile, "r").read().strip()
+        if not pid.isdigit():
+            print "Corrupt PID in lock file. Clearing."
+        else:
+            pid = int(pid)
+            try:
+                os.kill(pid, 0)
+            except OSError, e:
+                print "Looks like pysonic quit abnormally last run."
+            else:
+                print "It looks like pysonic is already running!"
+                return False
+        os.unlink(lockfile)
+
+    # Write our PID to the lockfile
+    try:
+        open(lockfile, "w").write(str(os.getpid()))
+    except:
+        print "Could not write lockfile!"
+        return False
+    return True
+
+def clearLock():
+    lockfile = getHome("lock")
+    try:
+        os.unlink(lockfile)
+    except:
+        print "Could not unlink the lock file!"
+        return False
+    return True
+
 def getWidth(used=0):
     """Get the remaining width of the terminal"""
 
@@ -216,6 +252,7 @@ def gracefulExit():
         for server in state.server:
             pickleLibrary(server)
 
+        clearLock()
         sys.exit(0)
     else:
         print " See ya!"
@@ -1057,6 +1094,10 @@ state.all_servers = []
 # Make sure the .pysonic folder exists
 if not os.path.isdir(getHome()):
     os.makedirs(getHome())
+
+# Get a lock (make sure we don't run twice at once)
+if not getLock():
+    sys.exit(1)
 
 # Parse the config file, load (or query) the server data
 config = ConfigParser.ConfigParser()
