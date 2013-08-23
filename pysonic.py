@@ -182,6 +182,12 @@ def live(arg=None):
         shell = code.InteractiveConsole(vars)
         shell.interact()
 
+def pickleLibrary(server):
+    # Don't save the server information in the pickle
+    library.updateServer(None)
+    # Dump the pickle
+    pickle.dump(server.library, open(server.pickle,"w"), 2)
+
 def gracefulExit():
     """Quit gracefully, saving state"""
 
@@ -206,6 +212,7 @@ def addServer():
     servername = ''.join(raw_input("Informal name (one word is best): ").split())
     server_url = raw_input("URL or subsonic username: ")
     username = raw_input("Username: ")
+    print "Press enter to use secure password mode. (Prompt for password each start.)"
     password = getpass.getpass()
     enabled = user_input_maps.get(raw_input("Enabled (y/n): ").lower(),True)
     jukebox = user_input_maps.get(raw_input("Jukebox mode (y/n): ").lower(), False)
@@ -605,6 +612,8 @@ class library:
         self.server = server
         for one_artist in self.artists:
             one_artist.updateServer(server)
+        for one_folder in self.folder.getFolders():
+            one_folder.updateServer(server)
 
     def addArtist(self, artist_id):
         """Add an artist to the library"""
@@ -613,6 +622,7 @@ class library:
             self.artists.append(new_artist)
 
     def updateIDS(self):
+        """Calculate a list of all song, album, and artist ids"""
         self.album_ids = map(lambda x:x.data_dict['id'], self.getAlbums())
         self.artist_ids = map(lambda x:x.data_dict['id'], self.getArtists())
         self.song_ids = map(lambda x:x.data_dict['id'], self.getSongs())
@@ -821,7 +831,7 @@ class library:
             print "Building folder..."
             self.folder = folder(server=self.server)
             # Pickle the new library
-            pickle.dump(self.server.library, open(self.server.pickle,"w"), 2)
+            pickleLibrary(self.server)
 
         res = []
         if search:
@@ -894,6 +904,12 @@ class server:
           'f': "xml"
         }
 
+        if password == "":
+            self.securepass = True
+            self.default_params['p'] = ""
+        else:
+            self.securepass = False
+
         # If the password is already hex encoded don't recode it
         if password[0:4] == "enc:":
             self.default_params['p'] = password
@@ -915,8 +931,11 @@ class server:
 
     def printConfig(self):
         """Return a string corresponding the the config file format for this server"""
+        password = self.default_params['p']
+        if self.securepass:
+            password = ""
         return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.servername, self.server_url, self.default_params['u'], \
-                self.default_params['p'], str(self.jukebox), str(self.enabled))
+                password, str(self.jukebox), str(self.enabled))
 
     def __str__(self):
         return self.printConfig()
@@ -968,6 +987,11 @@ class server:
 
     def goOnline(self):
         """Ping the server to ensure it is online, if it is load the pickle or generate the local cache if necessary"""
+
+        if self.default_params['p'] == "":
+            password = getpass.getpass()
+            self.default_params['p'] = "enc:" + password.encode("hex")
+
         sys.stdout.write("Checking if server " + self.servername + " is online: ")
         sys.stdout.flush()
         online = self.subRequest(timeout=2)
@@ -988,8 +1012,7 @@ class server:
             self.library = library(self)
             sys.stdout.write("Building library.")
             self.library.fillArtists()
-            self.library.updateServer(None)
-            pickle.dump(self.library, open(self.pickle,"w"), 2)
+            pickleLibrary(self)
             print ""
         # Update the server that the songs use
         self.library.updateServer(self)
@@ -1024,7 +1047,6 @@ config = ConfigParser.ConfigParser()
 config.read(getHome("config"))
 for one_server in config.sections():
 
-    # Add the new server
     curserver = server(one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), enabled=config.getboolean(one_server, 'enabled'), jukebox=config.getboolean(one_server, 'jukebox'))
     state.all_servers.append(curserver)
 
