@@ -609,7 +609,7 @@ class song:
             self.server.subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.data_dict['id']})
         else:
             return "#EXTINF:" + self.data_dict.get('duration','?').encode('utf-8') + ',' + \
-            self.data_dict.get('artist','?').encode('utf-8') + ' - ' + self.data_dict.get('title','?').encode('utf-8') +\
+            self.data_dict.get('artist','?').encode('utf-8') + ' | ' + self.data_dict.get('title','?').encode('utf-8') +\
              "\n" + self.server.subRequest(page="stream", extras={'id':self.data_dict['id']}) + "\n"
 
     def __str__(self):
