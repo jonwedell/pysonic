@@ -20,11 +20,13 @@ import sys
 import time
 import stat
 import random
+import socket
 import urllib
 import urllib2
 import getpass
 import readline
 import tempfile
+import telnetlib
 import subprocess
 import ConfigParser
 import cPickle as pickle
@@ -37,8 +39,11 @@ def getHome(filename=None):
     else:
         return os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic/"))
 
-def getLock():
-    lockfile = getHome("lock")
+def getLock(lockfile=None):
+    if lockfile is None:
+        lockfile = getHome("lock")
+    else:
+        lockfile = getHome(lockfile)
 
     # If there is a lockfile, see if it is stale
     if os.path.isfile(lockfile):
@@ -64,7 +69,12 @@ def getLock():
         return False
     return True
 
-def clearLock():
+def clearLock(lockfile=None):
+    if lockfile is None:
+        lockfile = getHome("lock")
+    else:
+        lockfile = getHome(lockfile)
+
     lockfile = getHome("lock")
     try:
         os.unlink(lockfile)
@@ -119,11 +129,6 @@ def nowPlaying():
                 (one_person.attrib.get('minutesAgo','?'), one_person.attrib.get('username','?'), \
                 one_person.attrib.get('title','?'), one_person.attrib.get('artist','?'), one_person.attrib.get('id','?'))
             one_server.library.getSongById(one_person.attrib['id'])
-
-def stopPlaying():
-    """Kill whatever is playing the media"""
-    p = subprocess.Popen([options.player, "--one-instance", "--no-playlist-enqueue", "vlc://quit"], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    p.wait()
 
 def chooseServer(query=None):
     """Choose whether to display one server or all servers"""
@@ -180,10 +185,6 @@ def playPrevious(play=False):
     # Count the number of results
     results = 0
 
-    # Build the basic VLC args
-    vlc_args = [options.player, "--one-instance"]
-    vlc_args.append("--no-playlist-enqueue") if play else vlc_args.append("--playlist-enqueue")
-
     # Get the play string
     playlist = ""
     for one_server in state.server:
@@ -198,14 +199,18 @@ def playPrevious(play=False):
 
     # Create the m3u file
     playlist_file = os.path.join(tempfile.gettempdir(), str(time.time())[-10:-3] + ".m3u")
-    vlc_args.append(playlist_file)
     playlistf = open(playlist_file, "w")
     playlistf.write("#EXTM3U\n")
     playlistf.write(playlist)
     playlistf.close()
 
-    # Launch the music in VLC
-    subprocess.Popen(vlc_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    if play:
+        state.vlc.write("clear")
+        state.vlc.write("enqueue " + playlist_file)
+    else:
+        state.vlc.write("enqueue " + playlist_file)
+    time.sleep(.1)
+    state.vlc.write("play")
 
 def live(arg=None):
     """Enter python terminal"""
@@ -255,7 +260,6 @@ def gracefulExit():
         clearLock()
         sys.exit(0)
     else:
-        print " See ya!"
         sys.exit(0)
 
 def addServer():
@@ -322,7 +326,7 @@ def parseInput(command):
     elif command == "new":
         for one_server in iterServers():
             one_server.library.getSpecialAlbums(number=arg)
-    elif command == "random":
+    elif command == "rand":
         for one_server in iterServers():
             one_server.library.getSpecialAlbums(albtype='random',number=arg)
     elif command == "server":
@@ -331,8 +335,32 @@ def parseInput(command):
         addServer()
     elif command == "now":
         nowPlaying()
-    elif command == "silence":
-        stopPlaying()
+    elif command == "pause":
+        state.vlc.write("pause")
+    elif command == "resume":
+        state.vlc.write("play")
+    elif command == "next":
+        state.vlc.write("next")
+        state.vlc.printPlaying()
+    elif command == "playlist":
+        print state.vlc.readWrite("playlist")
+    elif command == "prev":
+        state.vlc.write("prev")
+        state.vlc.printPlaying()
+    elif command == "clear":
+        state.vlc.write("clear")
+    elif command == "playing":
+        state.vlc.printPlaying()
+    elif command == "vlc":
+        print "Entering VLC shell:"
+        state.vlc.tn.interact()
+    elif command == "goto":
+        state.vlc.write("goto " + arg)
+        res = state.vlc.read()
+        if res != "":
+            print res
+        else:
+            state.vlc.printPlaying()
     elif command == "play":
         if arg:
             parseInput(arg)
@@ -347,34 +375,119 @@ def parseInput(command):
         writeMessage(arg)
     elif command == "read":
         getMessages()
+    elif command == "vlchelp":
+        print state.vlc.readWrite("help")
     elif command == "help" or command == "h":
-        print "Commands:"
+        print "Admin/Subsonic:"
         print "   'addserver' - interactively add a new server."
-        print "   'artist' - display all artists."
-        print "   'artist ID' - display albums of artist ID."
-        print "   'artist query' - display albums of artists which contain 'query'."
-        print "   'album ID' - displays songs in album ID."
-        print "   'song ID' - display the song with the given ID."
-        print "   'song query' - search all songs for query."
-        print "   'play' - play results of previous search immediately."
-        print "   'play artist|album|song query|ID' - play whatever the artist, album, or song query turns up immediately."
-        print "   'queue' - queue results of previous search."
-        print "   'queue artist|album|song query|ID' - queue whatever the artist, album, or song query turns up."
-        print "   'now' - shows who is currently listening to what."
-        print "   'new [numresults]' - prints new albums added to the server."
-        print "   'write message' - Writes message to the subsonic chat."
-        print "   'random [numresults]' - prints a random list of albums from the server."
         print "   'read' - Displays subsonic chat messages."
-        print "   'silence' - stop anything that is currently playing."
+        print "   'write message' - Writes message to the subsonic chat."
+        print "   'now' - shows who is currently listening to what on subsonic."
         print "   'server' - switch active servers. Run with no args for help."
+        print "   'vlc' - drop into a direct connection with the VLC CLI"
+        print "   'live' - drop into a python shell"
         print "   'quit', 'q', or ctrl-d - exit the CLI."
+        print "Querying and playing:"
+        print "   'artist [ID|query]' - display artists matching ID or query."
+        print "   'album [ID|query]' - displays albums matching ID or query."
+        print "   'song [ID|query]' - display songs matching ID or query."
+        print "   'play [artist|album|song query|ID]' - play whatever the artist, album, or song query turns up immediately. (Play previous result if no arguments.)"
+        print "   'queue [artist|album|song query|ID]' - queue whatever the artist, album, or song query turns up. (Queue previous result if no arguments.)"
+        print "   'new [numresults]' - prints new albums added to the server."
+        print "   'rand [numresults]' - prints a random list of albums from the server."
+        print "Playlist management:"
+        print "   'playlist' - display the current playlist"
+        print "   'clear' - clear the playlist"
+        print "   'goto ID' - go to item with ID in playlist"
+        print "   'next/prev' - skip to the next or previous track"
+        print "   'playing' - shows what is currently playing on the local machine."
+        print "   'pause/resume' - pause or play music"
+        print "   'vlchelp' - display additional help on VLC commands."
     elif command == "quit" or command == "q":
+        print " See ya!"
         gracefulExit()
     elif command == "":
         return
     else:
-        print "Invalid command '" + command + "'. Type 'help' for help."
+        # Try sending their command to VLC
+        if arg:
+            print state.vlc.readWrite(str(command) + " " + str(arg))
+        else:
+            print state.vlc.readWrite(str(command))
 
+class vlcinterface:
+    """Allows for interfacing (or creating and then interfacing) with local VLC instance"""
+    tn = None
+
+    def __init__(self):
+        try:
+            self.tn = telnetlib.Telnet("localhost",4212, 3)
+        except socket.error:
+            # Send all command output to dev/null
+            null = open("/dev/null", "w")
+            # Launch command line VLC in the background
+            pid = os.fork()
+            if pid == 0:
+                subprocess.Popen(["cvlc", "-I", "Telnet"], stderr=null, stdout=null)
+                sys.exit(0)
+            # Try opening the connection again
+            try:
+                time.sleep(.5)
+                self.tn = telnetlib.Telnet("localhost",4212)
+            except socket.error:
+                print "Could not connect to launched VLC process."
+                gracefulExit()
+
+        # Do the login dance
+        self.tn.write("admin\n")
+        self.read()
+
+    def read(self):
+        """Read from the VLC socket"""
+        try:
+            # Make sure if they send a message they wait a bit before receiving
+            time.sleep(.1)
+            mesg = self.tn.read_very_eager()
+            read = mesg
+            while len(read) > 0:
+                read = self.tn.read_very_eager()
+                mesg += read
+            if len(mesg) >= 4:
+                mesg = mesg[:-4]
+            elif len(mesg) == 2 and mesg == "> ":
+                mesg = ""
+            return mesg
+        except (EOFError, socket.error):
+            print "VLC socket died, please restart."
+            gracefulExit()
+    def write(self, message):
+        """Write a command to the VLC socket"""
+        try:
+            if message[-1:] != "\n":
+                message += "\n"
+            self.tn.write(message)
+        except (EOFError, socket.error):
+            print "VLC socket died, please restart."
+            gracefulExit()
+    def flush(self):
+        """Dump any data that the VLC socket has to send"""
+        try:
+            readdata = self.read()
+            while readdata != "":
+                readdata = state.vlc.read()
+        except (EOFError, socket.error):
+            print "VLC socket died, please restart."
+            gracefulExit()
+    def readWrite(self, message):
+        """Write a command and send back the response"""
+        self.flush()
+        self.write(message)
+        return self.read()
+    def printPlaying(self):
+        """Print the currently playin artist"""
+        self.flush()
+        self.write("get_title")
+        print self.read()
 
 class folder:
     """This class implements the logical concept of a folder."""
@@ -1127,6 +1240,9 @@ if len(state.server) < 1:
     else:
         print "No configuration file found. Configure a server now."
         addServer()
+
+# Connect to the VLC interface
+state.vlc = vlcinterface()
 
 # If we made it here then it must be!
 print "Successfully connected. Entering command mode:"
