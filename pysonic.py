@@ -246,6 +246,9 @@ def parseInput(command):
     elif command == "album":
         for one_server in iterServers():
             one_server.library.searchAlbums(arg)
+    elif command == "folder":
+        for one_folder in iterServers():
+            one_folder.library.searchFolders(arg)
     elif command == "song":
         for one_server in iterServers():
             one_server.library.searchSongs(arg)
@@ -313,15 +316,113 @@ def parseInput(command):
         print "Invalid command '" + command + "'. Type 'help' for help."
 
 
+class folder:
+    """This class implements the logical concept of a folder."""
+    data_dict = None
+    children = []
+    songs = []
+
+    def __init__(self, server=None, fold_id=None, data_dict=None):
+        """Create a folder heirarchy. Recursively calls itself with fold_id set to build the tree."""
+        self.children = []
+        self.songs = []
+        self.data_dict = data_dict
+        self.server = server
+
+        if fold_id:
+            childrens = self.server.subRequest(page="getMusicDirectory ", list_type='child', extras={'id':fold_id})
+            for child in childrens:
+                if child.attrib['isDir'] == "true" and child.attrib['title'][-5:] != ".flac" and child.attrib['title'][-4:] != ".mp3":
+                    print "Found directory: " + child.attrib['title'][0:getWidth(17)]
+                    self.children.append(folder(server=self.server, fold_id=child.attrib['id'], data_dict=child.attrib))
+                elif child.attrib['isDir'] == "true":
+                    print "Skipping (subsonic bug): " + child.attrib['title'][0:getWidth(25)]
+                else:
+                    if child.attrib['id'] in self.server.library.song_ids:
+                        self.songs.append(self.server.library.getSongById(child.attrib['id']))
+                    else:
+                        print "Found new song: " + child.attrib['title'][0:getWidth(16)]
+                        self.songs.append(song(child.attrib, server=self.server))
+        else:
+            server.library.updateIDS()
+            folders = self.server.subRequest(page="getIndexes", list_type='artist')
+            for one_folder in folders:
+                self.children.append(folder(server=self.server, fold_id=one_folder.attrib['id'], data_dict=one_folder.attrib))
+
+    def playSTR(self):
+        """Either return the needed playlist data, or run the command to add the song to the jukebox"""
+
+        if self.server.jukebox:
+            for child in self.children:
+                child.playSTR()
+            for one_song in self.songs:
+                one_song.playSTR()
+        else:
+            playlist = ""
+            for child in self.children:
+                playlist += child.playSTR()
+            for one_song in self.songs:
+                playlist += one_song.playSTR()
+            return playlist
+
+    def updateServer(self, server):
+        """Update the server this folder is linked to"""
+        self.server = server
+        for child in self.children:
+            child.updateServer(server)
+        for one_song in self.songs:
+            one_song.updateServer(server)
+
+    def recursivePrint(self, level=5, indentations=0):
+        """Prints children up to level n"""
+        if not self.data_dict is None:
+            name_title = self.data_dict.get('title','?').encode('utf-8')[0:getWidth(6)]
+            if name_title == "?":
+                name_title = self.data_dict.get('name','?').encode('utf-8')[0:getWidth(6)]
+            res = "%-4s: %s" % (self.data_dict['id'].encode('utf-8'), name_title)
+            if indentations > 0:
+                res = "   "*indentations + res
+        else:
+            res = "   "*indentations
+
+        if level > 0:
+            for child in self.children:
+                res += "\n" + child.recursivePrint(level-1, indentations+1)
+            for one_song in self.songs:
+                res += "\n" + one_song.recursivePrint(level-1, indentations+1)
+        return res
+
+    def getSongs(self):
+        """Get all of the songs that we can see"""
+        song_list = []
+        song_list.extend(self.songs)
+        for child in self.children:
+            song_list.extend(child.getSongs())
+        return song_list
+
+    def getFolders(self):
+        folder_list = self.children[:]
+        for child in self.children:
+            folder_list.extend(child.getFolders())
+        return folder_list
+
+    # Implement expected methods
+    def __iter__(self):
+        return iter(self.children)
+    def __len__(self):
+        return len(self.children)
+    def __str__(self):
+        return self.recursivePrint(1)
+
 class song:
     """This class implements the logical concept of a song."""
-    song_dict = None
+    data_dict = None
 
-    def __init__(self, song_dict, server=None):
+    def __init__(self, data_dict, server=None):
         """We need the dictionary to create a song."""
         self.server = server
-        if song_dict:
-            self.song_dict = song_dict
+        if data_dict:
+            self.data_dict = data_dict
         else:
             raise ValueError('You must pass the song dictionary to create a song.')
 
@@ -332,25 +433,25 @@ class song:
     def playSTR(self):
         """If in jukebox mode, have subsonic add the song to the jukebox playlist. Otherwise return the playlist string"""
         if self.server.jukebox:
-            self.server.subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.song_dict['id']})
+            self.server.subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.data_dict['id']})
         else:
-            return "#EXTINF:" + self.song_dict.get('duration','?').encode('utf-8') + ',' + \
-            self.song_dict.get('artist','?').encode('utf-8') + ' - ' + self.song_dict.get('title','?').encode('utf-8') +\
-             "\n" + self.server.subRequest(page="stream", extras={'id':self.song_dict['id']}) + "\n"
+            return "#EXTINF:" + self.data_dict.get('duration','?').encode('utf-8') + ',' + \
+            self.data_dict.get('artist','?').encode('utf-8') + ' - ' + self.data_dict.get('title','?').encode('utf-8') +\
+             "\n" + self.server.subRequest(page="stream", extras={'id':self.data_dict['id']}) + "\n"
 
     def __str__(self):
         return "%-3s: %s\n   %-4s: %s\n      %-5s: %s" % \
-                (self.song_dict.get('artistId','?').encode('utf-8'), self.song_dict.get('artist','?').encode('utf-8')[0:getWidth(5)],\
-                self.song_dict.get('albumId','?').encode('utf-8'), self.song_dict.get('album','?').encode('utf-8')[0:getWidth(9)],\
-                self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(13)])
+                (self.data_dict.get('artistId','?').encode('utf-8'), self.data_dict.get('artist','?').encode('utf-8')[0:getWidth(5)],\
+                self.data_dict.get('albumId','?').encode('utf-8'), self.data_dict.get('album','?').encode('utf-8')[0:getWidth(9)],\
+                self.data_dict.get('id','?').encode('utf-8'), self.data_dict.get('title','?').encode('utf-8')[0:getWidth(13)])
 
     def getDetails(self):
         """Print in a columnar mode that works well with multiple songs"""
-        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (self.song_dict.get('id',"?"), self.song_dict.get('albumId',"?"), self.song_dict.get('artistId',"?"), self.song_dict.get('title',"?")[:20], self.song_dict.get('album',"?")[:20], self.song_dict.get('artist',"?")[:19])
+        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (self.data_dict.get('id',"?"), self.data_dict.get('albumId',"?"), self.data_dict.get('artistId',"?"), self.data_dict.get('title',"?")[:20], self.data_dict.get('album',"?")[:20], self.data_dict.get('artist',"?")[:getWidth(61)])
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
-        res = "%-5s: %s" % (self.song_dict.get('id','?').encode('utf-8'), self.song_dict.get('title','?').encode('utf-8')[0:getWidth(7+3*indentations)])
+        res = "%-5s: %s" % (self.data_dict.get('id','?').encode('utf-8'), self.data_dict.get('title','?').encode('utf-8')[0:getWidth(7+3*indentations)])
         if indentations > 0:
             res = "   "*indentations + res
         return res
@@ -358,22 +459,22 @@ class song:
 
 class album:
     """This class implements the logical concept of an album."""
-    album_dict = None
+    data_dict = None
     songs = []
 
-    def __init__(self, album_dict, server=None):
+    def __init__(self, data_dict, server=None):
         """We need the dictionary to create an album."""
         self.songs = []
         self.server = server
-        if album_dict:
-            self.album_dict = album_dict
-            songs = self.server.subRequest(page="getAlbum", list_type='song', extras={'id':self.album_dict['id']})
+        if data_dict:
+            self.data_dict = data_dict
+            songs = self.server.subRequest(page="getAlbum", list_type='song', extras={'id':self.data_dict['id']})
             sys.stdout.write('.')
             sys.stdout.flush()
             for one_song in songs:
                 self.songs.append(song(one_song.attrib, server=self.server))
             # Sort the songs by track number
-            self.songs.sort(key=lambda k: int(k.song_dict.get('track','0')))
+            self.songs.sort(key=lambda k: int(k.data_dict.get('track','0')))
         else:
             raise ValueError('You must pass the album dictionary to create an album.')
 
@@ -397,7 +498,7 @@ class album:
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
-        res = "%-4s: %s" % (self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(6+3*indentations)])
+        res = "%-4s: %s" % (self.data_dict.get('id','?').encode('utf-8'), self.data_dict.get('name','?').encode('utf-8')[0:getWidth(6+3*indentations)])
         if indentations > 0:
             res = "   "*indentations + res
         if level > 0:
@@ -406,7 +507,7 @@ class album:
         return res
 
     def specialPrint(self):
-        return "%-3s: %-20s %-3s: %-3s" % (self.album_dict.get('artistId','?').encode('utf-8'), self.album_dict.get('artist','?').encode('utf-8')[0:20], self.album_dict.get('id','?').encode('utf-8'), self.album_dict.get('name','?').encode('utf-8')[0:getWidth(31)])
+        return "%-3s: %-20s %-3s: %-3s" % (self.data_dict.get('artistId','?').encode('utf-8'), self.data_dict.get('artist','?').encode('utf-8')[0:20], self.data_dict.get('id','?').encode('utf-8'), self.data_dict.get('name','?').encode('utf-8')[0:getWidth(31)])
 
     # Implement expected methods
     def __iter__(self):
@@ -414,12 +515,12 @@ class album:
     def __len__(self):
         return len(self.songs)
     def __str__(self):
-        return "%-3s: %s\n" % (self.album_dict.get('artistId','?').encode('utf-8'), self.album_dict.get('artist','?').encode('utf-8')[0:getWidth(5)]) + self.recursivePrint(1,1)
+        return "%-3s: %s\n" % (self.data_dict.get('artistId','?').encode('utf-8'), self.data_dict.get('artist','?').encode('utf-8')[0:getWidth(5)]) + self.recursivePrint(1,1)
 
 
 class artist:
     """This class implements the logical concept of an artist."""
-    artist_dict = None
+    data_dict = None
     albums = []
 
     def addAlbums(self, albums):
@@ -440,19 +541,19 @@ class artist:
 
         if artist_id is not None:
             # Fetch the whole XML tree for this artist
-            artist_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True)
+            data_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True)
 
-            if artist_dict == "err":
+            if data_dict == "err":
                 return None
 
-            if len(artist_dict) == 1:
-                self.artist_dict = artist_dict[0].attrib
-                self.addAlbums(artist_dict[0].getchildren())
+            if len(data_dict) == 1:
+                self.data_dict = data_dict[0].attrib
+                self.addAlbums(data_dict[0].getchildren())
             else:
-                print artist_dict
+                print data_dict
                 raise ValueError('The root you passed includes more than one artist.')
             # Sort the albums by ID
-            self.albums.sort(key=lambda k: int(k.album_dict.get('id','0')))
+            self.albums.sort(key=lambda k: int(k.data_dict.get('id','0')))
         else:
             raise ValueError('You must pass the artist dictionary to create an artist.')
 
@@ -470,7 +571,7 @@ class artist:
 
     def recursivePrint(self, level=3, indentations=0):
         """Prints children up to level n"""
-        res = "%-3s: %s" % (self.artist_dict.get('id','?').encode('utf-8'), self.artist_dict.get('name','?').encode('utf-8')[0:getWidth(5+3*indentations)])
+        res = "%-3s: %s" % (self.data_dict.get('id','?').encode('utf-8'), self.data_dict.get('name','?').encode('utf-8')[0:getWidth(5+3*indentations)])
         if indentations > 0:
             res = "   "*indentations + res
         if level > 0:
@@ -497,6 +598,7 @@ class library:
             raise ValueError("You must specify a corresponding server for this library.")
         self.artists = []
         self.server = server
+        self.folder = None
 
     def updateServer(self, server):
         """Update the server this library is linked to"""
@@ -511,8 +613,9 @@ class library:
             self.artists.append(new_artist)
 
     def updateIDS(self):
-        self.album_ids = map(lambda x:x.album_dict['id'], self.getAlbums())
-        self.artist_ids = map(lambda x:x.artist_dict['id'], self.getArtists())
+        self.album_ids = map(lambda x:x.data_dict['id'], self.getAlbums())
+        self.artist_ids = map(lambda x:x.data_dict['id'], self.getArtists())
+        self.song_ids = map(lambda x:x.data_dict['id'], self.getSongs())
 
     def updateLib(self):
         """Check for new albums and artists"""
@@ -603,7 +706,7 @@ class library:
     def getSongById(self, song_id):
         """Fetch a song from the library based on it's id"""
         for one_song in self.getSongs():
-            if one_song.song_dict['id'] == song_id:
+            if one_song.data_dict['id'] == song_id:
                 self.prev_res = [one_song]
                 return one_song
         self.prev_res = []
@@ -612,14 +715,14 @@ class library:
     def getArtistById(self, artist_id):
         """Return an artist based on ID"""
         for one_artist in self.getArtists():
-            if one_artist.artist_dict['id'] == artist_id:
+            if one_artist.data_dict['id'] == artist_id:
                 return one_artist
         return None
 
     def getAlbumById(self, album_id):
         """Return an artist based on ID"""
         for one_album in self.getAlbums():
-            if one_album.album_dict['id'] == album_id:
+            if one_album.data_dict['id'] == album_id:
                 return one_album
         return None
 
@@ -629,10 +732,10 @@ class library:
             res = []
             for one_song in self.getSongs():
                 if search.isdigit():
-                    if one_song.song_dict['id'] == search:
+                    if one_song.data_dict['id'] == search:
                         res.append(one_song)
                 else:
-                    if search.lower() in one_song.song_dict['title'].lower():
+                    if search.lower() in one_song.data_dict['title'].lower():
                         res.append(one_song)
         else:
             res = self.getSongs()
@@ -665,10 +768,10 @@ class library:
             res = []
             for one_album in self.getAlbums():
                 if search.isdigit():
-                    if one_album.album_dict['id'] == search:
+                    if one_album.data_dict['id'] == search:
                         res.append(one_album)
                 else:
-                    if search.lower() in one_album.album_dict['name'].lower():
+                    if search.lower() in one_album.data_dict['name'].lower():
                         res.append(one_album)
         else:
             res = self.getAlbums()
@@ -692,10 +795,10 @@ class library:
 
             for one_artist in self.getArtists():
                 if search.isdigit():
-                    if one_artist.artist_dict['id'] == search:
+                    if one_artist.data_dict['id'] == search:
                         res.append(one_artist)
                 else:
-                    if search.lower() in one_artist.artist_dict['name'].lower():
+                    if search.lower() in one_artist.data_dict['name'].lower():
                         res.append(one_artist)
         else:
             res = self.getArtists()
@@ -712,6 +815,38 @@ class library:
             else:
                 print one_artist.recursivePrint(0)
 
+    def searchFolders(self, search=None):
+        """ Search through the folders for the query or id"""
+        if not hasattr(self, 'folder') or self.folder is None:
+            print "Building folder..."
+            self.folder = folder(server=self.server)
+            # Pickle the new library
+            pickle.dump(self.server.library, open(self.server.pickle,"w"), 2)
+
+        res = []
+        if search:
+
+            for one_folder in self.folder.getFolders():
+                if search.isdigit():
+                    if one_folder.data_dict['id'] == search:
+                        res.append(one_folder)
+                else:
+                    tn = one_folder.data_dict.get('title','?').lower()
+                    if tn == "?":
+                        tn = one_folder.data_dict.get('name','?').lower()
+                    if search.lower() in tn:
+                        res.append(one_folder)
+        else:
+            res = self.folder.children
+
+        self.prev_res = res
+
+        for one_folder in res:
+            if search:
+                print one_folder.recursivePrint(1)
+            else:
+                print one_folder.recursivePrint(0)
+
     def getSpecialAlbums(self, albtype='newest', number=10):
         """Returns either new or random albums"""
 
@@ -727,7 +862,7 @@ class library:
                 number = len(albums)
             res = random.sample(albums,number)
         elif albtype == 'newest':
-            res = reversed(sorted(self.getAlbums(), key=lambda k:k.album_dict.get('created','?'))[-number:])
+            res = reversed(sorted(self.getAlbums(), key=lambda k:k.data_dict.get('created','?'))[-number:])
         else:
             raise ValueError("Invalid type to search for.")
 
