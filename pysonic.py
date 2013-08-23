@@ -183,8 +183,13 @@ def live(arg=None):
         shell.interact()
 
 def pickleLibrary(server):
-    # Don't save the server information in the pickle
+    # Don't save useless information in the pickle
     server.library.updateServer(None)
+    server.library.album_ids = None
+    server.library.artist_ids = None
+    server.library.song_ids = None
+    server.library.prev_res = None
+
     # Dump the pickle
     pickle.dump(server.library, open(server.pickle,"w"), 2)
 
