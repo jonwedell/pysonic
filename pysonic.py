@@ -184,26 +184,37 @@ def live(arg=None):
 
 def pickleLibrary(server):
     # Don't save the server information in the pickle
-    library.updateServer(None)
+    server.library.updateServer(None)
     # Dump the pickle
     pickle.dump(server.library, open(server.pickle,"w"), 2)
 
 def gracefulExit():
     """Quit gracefully, saving state"""
 
-    # Create the history file if it doesn't exist
-    if not os.path.isfile(getHome("history")):
-        open(getHome("history"), "a").close()
-    readline.write_history_file(getHome("history"))
+    # By forking, we can seem to quit right away but take a few moments
+    #  to finish writing our state to disk
+    pid = os.fork()
 
-    # Write the current servers to the config file
-    config = ""
-    for server in state.all_servers:
-        config += server.printConfig()
-    open(getHome("config"), 'w').write(config)
+    if pid == 0:
+        # Create the history file if it doesn't exist
+        if not os.path.isfile(getHome("history")):
+            open(getHome("history"), "a").close()
+        readline.write_history_file(getHome("history"))
 
-    print " See ya!"
-    sys.exit(0)
+        # Write the current servers to the config file
+        config = ""
+        for server in state.all_servers:
+            config += server.printConfig()
+        open(getHome("config"), 'w').write(config)
+
+        # Pickle the libraries
+        for server in state.server:
+            pickleLibrary(server)
+
+        sys.exit(0)
+    else:
+        print " See ya!"
+        sys.exit(0)
 
 def addServer():
     """Interactively add a new server"""
