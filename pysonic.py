@@ -323,9 +323,6 @@ def parseInput(command):
     elif command == "song":
         for one_server in iterServers():
             one_server.library.searchSongs(arg)
-    elif command == "update":
-        for one_server in iterServers():
-            one_server.library.updateLib()
     elif command == "rebuild":
         for one_server in iterServers():
             os.unlink(getHome(one_server.pickle))
@@ -787,8 +784,8 @@ class library:
         self.server = server
         for one_artist in self.artists:
             one_artist.updateServer(server)
-        for one_folder in self.folder.getFolders():
-            one_folder.updateServer(server)
+        #for one_folder in self.folder.getFolders():
+        #    one_folder.updateServer(server)
 
     def addArtist(self, artist_id):
         """Add an artist to the library"""
