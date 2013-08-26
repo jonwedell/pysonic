@@ -1191,11 +1191,11 @@ class server:
 # Specify some basic information about our command
 parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
-#parser.add_option("--player", action="store", dest="player", default="/usr/bin/vlc", help="Location of media player to queue songs in.")
+parser.add_option("--passthrough", action="store_true", dest="passthrough", default=False, help="Send commands directly to VLC without loading anything.")
+parser.add_option("--vlc-location", action="store", dest="player", default="/usr/bin/vlc", help="Location of VLC binary.")
 
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
-options.player = "/usr/bin/vlc"
 
 # Create a class to hold the current state
 class state_obj(object):
@@ -1203,6 +1203,13 @@ class state_obj(object):
 state = state_obj()
 state.server = []
 state.all_servers = []
+
+# If they only want to send commands to VLC, go ahead
+if options.passthrough:
+    state.vlc = vlcinterface()
+    for line in sys.stdin.readlines():
+        print state.vlc.readWrite(line.rstrip())
+    sys.exit(0)
 
 # Make sure the .pysonic folder exists
 if not os.path.isdir(getHome()):
