@@ -15,6 +15,9 @@ Coded by Jon Wedell
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+# TODO:
+# 1) Sort artists by name after updates
+
 import os
 import sys
 import time
@@ -102,7 +105,7 @@ def getWidth(used=0):
     # Return the remaining terminal width
     return int(state.cols)-used
 
-def getMessages():
+def printMessages():
     """Get chat messages"""
     for one_server in state.server:
         print "On server: " + one_server.servername
@@ -290,6 +293,19 @@ def addServer():
         if curserver.online:
             state.server.append(curserver)
 
+def backgroundThread():
+
+    state.messages = one_server.subRequest(page="getChatMessages", list_type='chatMessage')
+
+    while True:
+        time.sleep(10)
+
+        messages = one_server.subRequest(page="getChatMessages", list_type='chatMessage')
+        for x in range(len(state.messages),len(state.messages)):
+            print x
+        #mesg_str += "   At %s %s wrote %s." % (message.attrib.get('time','?'), message.attrib.get('username','?'), message.attrib.get('message','?'))
+
+
 def iterServers():
     """A generator that goes through the active servers"""
     for one_server in state.server:
@@ -379,7 +395,7 @@ def parseInput(command):
     elif command == "write":
         writeMessage(arg)
     elif command == "read":
-        getMessages()
+        printMessages()
     elif command == "vlchelp":
         print state.vlc.readWrite("help")
     elif command == "help" or command == "h":
@@ -1284,6 +1300,9 @@ if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
         parseInput(line.rstrip())
     clearLock()
     sys.exit(0)
+
+# Start the background thread
+thread.start_new_thread(backgroundThread, ())
 
 # Enter our loop, let them issue commands!
 while True:
