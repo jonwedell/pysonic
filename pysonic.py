@@ -37,6 +37,9 @@ import cPickle as pickle
 import xml.etree.ElementTree as ET
 from optparse import OptionParser, OptionGroup
 
+import pynotify
+pynotify.init("pysonic")
+
 def getHome(filename=None):
     if filename:
         return os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic",filename))
@@ -292,19 +295,6 @@ def addServer():
         curserver.goOnline()
         if curserver.online:
             state.server.append(curserver)
-
-def backgroundThread():
-
-    state.messages = one_server.subRequest(page="getChatMessages", list_type='chatMessage')
-
-    while True:
-        time.sleep(10)
-
-        messages = one_server.subRequest(page="getChatMessages", list_type='chatMessage')
-        for x in range(len(state.messages),len(state.messages)):
-            print x
-        #mesg_str += "   At %s %s wrote %s." % (message.attrib.get('time','?'), message.attrib.get('username','?'), message.attrib.get('message','?'))
-
 
 def iterServers():
     """A generator that goes through the active servers"""
@@ -818,6 +808,24 @@ class library:
         self.artist_ids = map(lambda x:x.data_dict['id'], self.getArtists())
         self.song_ids = map(lambda x:x.data_dict['id'], self.getSongs())
 
+    def backgroundThread(self):
+        """Run in the background and check for new messages on active servers"""
+
+        if not hasattr(self, 'messages'):
+            self.messages = []
+
+        # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
+        time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
+
+        while True:
+            messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage')
+            for message in messages:
+                if not message.attrib['time'] in [x['time'] for x in self.messages]:
+                    mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
+                    pynotify.Notification("New message from " + message.attrib['username'], mesg).show()
+                    self.messages.append(message.attrib)
+            time.sleep(options.listener)
+
     def updateLib(self):
         """Check for new albums and artists"""
 
@@ -1214,7 +1222,9 @@ class server:
         self.library.updateServer(self)
         # Update the library in the background
         thread.start_new_thread(self.library.updateLib, ())
-
+        # Start the background thread
+        if options.listener:
+            thread.start_new_thread(self.library.backgroundThread, ())
 
 ########################################################################
 #              Methods and classes above, code below                   #
@@ -1224,6 +1234,7 @@ class server:
 parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
 parser.add_option("--passthrough", action="store_true", dest="passthrough", default=False, help="Send commands directly to VLC without loading anything.")
+parser.add_option("--pingtime", action="store", dest="listener", type="int", default=int(60), help="How many seconds to wait between pinging server for new messages? (0 = Never ping)")
 parser.add_option("--vlc-location", action="store", dest="player", default="/usr/bin/vlc", help="Location of VLC binary.")
 
 # Options, parse 'em
@@ -1300,9 +1311,6 @@ if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
         parseInput(line.rstrip())
     clearLock()
     sys.exit(0)
-
-# Start the background thread
-thread.start_new_thread(backgroundThread, ())
 
 # Enter our loop, let them issue commands!
 while True:
