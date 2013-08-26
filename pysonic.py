@@ -19,6 +19,7 @@ import os
 import sys
 import time
 import stat
+import thread
 import random
 import socket
 import urllib
@@ -328,6 +329,7 @@ def parseInput(command):
     elif command == "rebuild":
         for one_server in iterServers():
             os.unlink(getHome(one_server.pickle))
+            one_server.library.initialized = False
             one_server.goOnline()
     elif command == "new":
         for one_server in iterServers():
@@ -648,8 +650,9 @@ class album:
         if data_dict:
             self.data_dict = data_dict
             songs = self.server.subRequest(page="getAlbum", list_type='song', extras={'id':self.data_dict['id']})
-            sys.stdout.write('.')
-            sys.stdout.flush()
+            if not server.library.initialized:
+                sys.stdout.write('.')
+                sys.stdout.flush()
             for one_song in songs:
                 self.songs.append(song(one_song.attrib, server=self.server))
             # Sort the songs by track number
@@ -811,15 +814,14 @@ class library:
         for one_album in new_albums:
             if not one_album.attrib['artistId'] in self.artist_ids:
                 if self.addArtist(one_album.attrib['artistId']):
-                    print "Adding artist " + one_album.attrib['artist'].encode('utf-8')
+                    #print "Adding artist " + one_album.attrib['artist'].encode('utf-8')
                     self.updateIDS()
             elif not one_album.attrib['id'] in self.album_ids:
-                print "Adding album " + one_album.attrib['name'].encode('utf-8') + " to artist " + one_album.attrib['artist'].encode('utf-8') + ": "
+                #print "Adding album " + one_album.attrib['name'].encode('utf-8') + " to artist " + one_album.attrib['artist'].encode('utf-8') + ": "
                 self.getArtistById(one_album.attrib['artistId']).addAlbums([one_album])
                 self.updateIDS()
                 print self.getArtistById(one_album.attrib['artistId']).recursivePrint()
         self.lastUpdate = time.time()
-        print "Done!"
 
     def fillArtists(self):
         """Query the server for all the artists and albums"""
@@ -1197,6 +1199,8 @@ class server:
             sys.exit(2)
         # Update the server that the songs use
         self.library.updateServer(self)
+        # Update the library in the background
+        thread.start_new_thread(self.library.updateLib, ())
 
 
 ########################################################################
@@ -1232,7 +1236,6 @@ if not os.path.isdir(getHome()):
 
 # Get a lock (make sure we don't run twice at once)
 if not getLock():
-    clearLock()
     sys.exit(1)
 
 # Parse the config file, load (or query) the server data
