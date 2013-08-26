@@ -234,7 +234,7 @@ def pickleLibrary(server):
     # Dump the pickle
     pickle.dump(server.library, open(server.pickle,"w"), 2)
 
-def gracefulExit():
+def gracefulExit(code=0):
     """Quit gracefully, saving state"""
 
     # By forking, we can seem to quit right away but take a few moments
@@ -258,9 +258,9 @@ def gracefulExit():
             pickleLibrary(server)
 
         clearLock()
-        sys.exit(0)
+        sys.exit(code)
     else:
-        sys.exit(0)
+        sys.exit(code)
 
 def addServer():
     """Interactively add a new server"""
@@ -1210,6 +1210,7 @@ if not os.path.isdir(getHome()):
 
 # Get a lock (make sure we don't run twice at once)
 if not getLock():
+    clearLock()
     sys.exit(1)
 
 # Parse the config file, load (or query) the server data
@@ -1236,6 +1237,7 @@ for one_server in state.all_servers:
 if len(state.server) < 1:
     if len(config.sections()) > 0:
         print "No connections established. Do you have at least one server specified in ~/.pysonic/config and are your username, server URL, and password correct?"
+        clearLock()
         sys.exit(10)
     else:
         print "No configuration file found. Configure a server now."
@@ -1258,6 +1260,7 @@ mode = os.fstat(0).st_mode
 if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
     for line in sys.stdin.readlines():
         parseInput(line.rstrip())
+    clearLock()
     sys.exit(0)
 
 # Enter our loop, let them issue commands!
