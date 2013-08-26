@@ -32,9 +32,9 @@ import time
 parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
 parser.add_option("--jukebox", action="store_true", dest="jukebox", default=False, help="Do everything in jukebox mode.")
-parser.add_option("--server", action="store", dest="server", default="jonwedell.subsonic.org", help="Server address.")
-parser.add_option("--username", action="store", dest="username", default="jon", help="User name.")
-parser.add_option("--password", action="store", dest="password", default="trinitron78", help="Password. (Don't specify on the command line!)")
+parser.add_option("--server", action="store", dest="server", default="subsonic.org", help="Server address.")
+parser.add_option("--username", action="store", dest="username", default="nobody", help="User name.")
+parser.add_option("--password", action="store", dest="password", default="password", help="Password. (Don't specify on the command line!)")
 parser.add_option("--player", action="store", dest="player", default="/usr/bin/vlc", help="Location of media player to queue songs in.")
 
 # Options, parse 'em
