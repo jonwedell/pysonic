@@ -57,7 +57,7 @@ def getLock(lockfile=None):
             except OSError, e:
                 print "Looks like pysonic quit abnormally last run."
             else:
-                print "It looks like pysonic is already running!"
+                print "It looks like pysonic is already running! (Or just quit.)"
                 return False
         os.unlink(lockfile)
 
@@ -215,7 +215,10 @@ def playPrevious(play=False):
 def live(arg=None):
     """Enter python terminal"""
     if arg:
-        exec(arg)
+        try:
+            exec(arg)
+        except Exception, e:
+            print "Whatever you did triggered this error: " + str(e)
     else:
         import code
         vars = globals()
@@ -242,6 +245,9 @@ def gracefulExit(code=0):
     pid = os.fork()
 
     if pid == 0:
+        # Update the lock to look at our PID
+        open(getHome("lock"), "w").write(str(os.getpid()))
+
         # Create the history file if it doesn't exist
         if not os.path.isfile(getHome("history")):
             open(getHome("history"), "a").close()
@@ -804,7 +810,7 @@ class library:
 
         for one_album in new_albums:
             if not one_album.attrib['artistId'] in self.artist_ids:
-                if self.addArtist(one_album.attrib['id']):
+                if self.addArtist(one_album.attrib['artistId']):
                     print "Adding artist " + one_album.attrib['artist'].encode('utf-8')
                     self.updateIDS()
             elif not one_album.attrib['id'] in self.album_ids:
@@ -812,7 +818,7 @@ class library:
                 self.getArtistById(one_album.attrib['artistId']).addAlbums([one_album])
                 self.updateIDS()
                 print self.getArtistById(one_album.attrib['artistId']).recursivePrint()
-
+        self.lastUpdate = time.time()
         print "Done!"
 
     def fillArtists(self):
@@ -886,7 +892,7 @@ class library:
     def getSongById(self, song_id):
         """Fetch a song from the library based on it's id"""
         for one_song in self.getSongs():
-            if one_song.data_dict['id'] == song_id:
+            if one_song.data_dict['id'] == str(song_id):
                 self.prev_res = [one_song]
                 return one_song
         self.prev_res = []
@@ -895,14 +901,14 @@ class library:
     def getArtistById(self, artist_id):
         """Return an artist based on ID"""
         for one_artist in self.getArtists():
-            if one_artist.data_dict['id'] == artist_id:
+            if one_artist.data_dict['id'] == str(artist_id):
                 return one_artist
         return None
 
     def getAlbumById(self, album_id):
         """Return an artist based on ID"""
         for one_album in self.getAlbums():
-            if one_album.data_dict['id'] == album_id:
+            if one_album.data_dict['id'] == str(album_id):
                 return one_album
         return None
 
@@ -1186,7 +1192,7 @@ class server:
             pickleLibrary(self)
             print ""
         except EOFError:
-            print "Pickle file incomplete. Usually this happens if you quit pysonic and immediately restart it while the pickle is still being written to disk. Wait 10 seconds and try again. If you still receive this message, you may have to erase your pickle file. (" + getHome(self.pickle) + ")"
+            print "Pickle file corrupt. If this error doesn't go away, delete the file: " + getHome(self.pickle)
             clearLock()
             sys.exit(2)
         # Update the server that the songs use
