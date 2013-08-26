@@ -714,7 +714,7 @@ class artist:
 
         if artist_id is not None:
             # Fetch the whole XML tree for this artist
-            data_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True)
+            data_dict = self.server.subRequest(page="getArtist", list_type='album', extras={'id':artist_id}, retroot=True, print_errors=False)
 
             if data_dict == "err":
                 return None
@@ -786,6 +786,9 @@ class library:
         new_artist = artist(artist_id, server=self.server)
         if new_artist:
             self.artists.append(new_artist)
+            return True
+        else:
+            return False
 
     def updateIDS(self):
         """Calculate a list of all song, album, and artist ids"""
@@ -801,15 +804,16 @@ class library:
 
         for one_album in new_albums:
             if not one_album.attrib['artistId'] in self.artist_ids:
-                sys.stdout.write("Adding artist " + one_album.attrib['artist'].encode('utf-8') + ": ")
-                sys.stdout.flush()
-                self.addArtist(one_album.attrib['id'])
-                self.updateIDS()
+                if self.addArtist(one_album.attrib['id']):
+                    print "Adding artist " + one_album.attrib['artist'].encode('utf-8')
+                    self.updateIDS()
             elif not one_album.attrib['id'] in self.album_ids:
-                sys.stdout.write("Adding album " + one_album.attrib['name'].encode('utf-8') + " to artist " + one_album.attrib['artist'].encode('utf-8') + ": ")
-                sys.stdout.flush()
-                self.getArtistById(one_album.attrib['artistId']).addAlbums(one_album)
+                print "Adding album " + one_album.attrib['name'].encode('utf-8') + " to artist " + one_album.attrib['artist'].encode('utf-8') + ": "
+                self.getArtistById(one_album.attrib['artistId']).addAlbums([one_album])
                 self.updateIDS()
+                print self.getArtistById(one_album.attrib['artistId']).recursivePrint()
+
+        print "Done!"
 
     def fillArtists(self):
         """Query the server for all the artists and albums"""
@@ -1106,7 +1110,7 @@ class server:
     def __str__(self):
         return self.printConfig()
 
-    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, retroot=False):
+    def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, retroot=False, print_errors=True):
         """Query subsonic, parse resulting xml and return an ElementTree"""
 
         # Add request specific parameters to our hash
@@ -1140,8 +1144,9 @@ class server:
 
         # Make sure the result is valid
         if root.attrib['status'] != 'ok':
-            sys.stdout.write("Error: " + root[0].attrib['message'] + "\n")
-            sys.stdout.flush()
+            if print_errors:
+                sys.stdout.write("Error: " + root[0].attrib['message'] + "\n")
+                sys.stdout.flush()
             return 'err'
 
         # Short circuit return the whole tree if requested
@@ -1180,6 +1185,10 @@ class server:
             self.library.fillArtists()
             pickleLibrary(self)
             print ""
+        except EOFError:
+            print "Pickle file incomplete. Usually this happens if you quit pysonic and immediately restart it while the pickle is still being written to disk. Wait 10 seconds and try again. If you still receive this message, you may have to erase your pickle file. (" + getHome(self.pickle) + ")"
+            clearLock()
+            sys.exit(2)
         # Update the server that the songs use
         self.library.updateServer(self)
 
