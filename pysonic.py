@@ -822,7 +822,9 @@ class library:
             for message in messages:
                 if not message.attrib['time'] in [x['time'] for x in self.messages]:
                     mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
-                    pynotify.Notification("New message from " + message.attrib['username'], mesg).show()
+                    note = pynotify.Notification("New message from " + message.attrib['username'], mesg)
+                    note.set_timeout(0)
+                    note.show()
                     self.messages.append(message.attrib)
             time.sleep(options.listener)
 
