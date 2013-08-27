@@ -56,7 +56,7 @@ def getLock(lockfile=None):
     if os.path.isfile(lockfile):
         pid = open(lockfile, "r").read().strip()
         if not pid.isdigit():
-            print "Corrupt PID in lock file. Clearing."
+            print "Corrupt PID in lock file (" +str(pid)+ "). Clearing."
         else:
             pid = int(pid)
             try:
@@ -622,7 +622,7 @@ class song:
             self.server.subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.data_dict['id']})
         else:
             return "#EXTINF:" + self.data_dict.get('duration','?').encode('utf-8') + ',' + \
-            self.data_dict.get('artist','?').encode('utf-8') + ' | ' + self.data_dict.get('title','?').encode('utf-8') +\
+            self.data_dict.get('artist','?').replace(",","").encode('utf-8') + ' | ' + self.data_dict.get('title','?').replace(",","").encode('utf-8') +\
              "\n" + self.server.subRequest(page="stream", extras={'id':self.data_dict['id']}) + "\n"
 
     def __str__(self):
@@ -817,18 +817,18 @@ class library:
             self.messages = []
 
         # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
-        time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
+        #time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
 
-        while True:
-            messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage')
-            for message in messages:
-                if not message.attrib['time'] in [x['time'] for x in self.messages]:
-                    mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
-                    note = pynotify.Notification("New message from " + message.attrib['username'], mesg)
-                    note.set_timeout(0)
-                    note.show()
-                    self.messages.append(message.attrib)
-            time.sleep(options.listener)
+        #while True:
+        messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage')
+        for message in messages:
+            if not message.attrib['time'] in [x['time'] for x in self.messages]:
+                mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
+                note = pynotify.Notification("New message from " + message.attrib['username'], mesg)
+                note.set_timeout(0)
+                note.show()
+                self.messages.append(message.attrib)
+        #ytime.sleep(options.listener)
 
     def updateLib(self):
         """Check for new albums and artists"""
@@ -1226,8 +1226,8 @@ class server:
         thread.start_new_thread(self.library.updateLib, ())
         #t = threading.Thread(target=self.library.updateLib)
         # Start the background thread
-        if options.listener:
-            thread.start_new_thread(self.library.backgroundThread, ())
+        #if options.listener:
+        #    thread.start_new_thread(self.library.backgroundThread, ())
 
 ########################################################################
 #              Methods and classes above, code below                   #
@@ -1319,6 +1319,7 @@ if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
 
 # Enter our loop, let them issue commands!
 while True:
+
     # Catch control-c
     try:
         # Accept the input, quit on an EOF
@@ -1326,6 +1327,12 @@ while True:
             command = raw_input(":")
         except EOFError:
             gracefulExit()
+
+        # Check for new messages
+        if options.listener:
+            for one_server in state.server:
+                thread.start_new_thread(one_server.library.backgroundThread, ())
+        time.sleep(.2)
 
         parseInput(command)
 
