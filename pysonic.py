@@ -1151,16 +1151,19 @@ class server:
         # Encode our parameters and send the request
         params = urllib.urlencode(params)
 
+        # Encode the URL
+        tmp = self.server_url+page+"?"+params
+
         # To stream we only want the URL returned, not the data
         if page == "stream":
-            return self.server_url+page+"?"+params
+            return tmp
 
         if options.verbose:
-            print self.server_url+page+"?"+params
+            print tmp
 
         # Get the server response
         try:
-            stringres = urllib2.urlopen(self.server_url+page,params, timeout=timeout).read()
+            stringres = urllib2.urlopen(tmp, timeout=timeout).read()
         except urllib2.URLError as e:
             sys.stdout.write("Error: " + str(e) + "\n")
             sys.stdout.flush()
