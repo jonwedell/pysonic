@@ -22,7 +22,7 @@ import os
 import sys
 import time
 import stat
-import threading
+import thread
 import random
 import socket
 import urllib
@@ -813,23 +813,14 @@ class library:
     def backgroundThread(self):
         """Run in the background and check for new messages on active servers"""
 
-        myfile = open("/tmp/mesg", 'w')
-
         if not hasattr(self, 'messages'):
             self.messages = []
 
         # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
-        sleep_time = random.randint(int(options.listener*.5),int(options.listener*1.5))
-        myfile.write("Initial sleep of " + str(sleep_time) + "\n")
-        myfile.flush()
-        time.sleep(sleep_time)
+        time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
 
         while True:
-            myfile.write("While True:\n")
-            myfile.flush()
             messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage')
-            myfile.write("Request complete\n")
-            myfile.flush()
             for message in messages:
                 if not message.attrib['time'] in [x['time'] for x in self.messages]:
                     mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
@@ -837,8 +828,6 @@ class library:
                     note.set_timeout(0)
                     note.show()
                     self.messages.append(message.attrib)
-            myfile.write("Processing complete, sleeping for " + str(options.listener) + "\n")
-            myfile.flush()
             time.sleep(options.listener)
 
     def updateLib(self):
@@ -850,10 +839,8 @@ class library:
         for one_album in new_albums:
             if not one_album.attrib['artistId'] in self.artist_ids:
                 if self.addArtist(one_album.attrib['artistId']):
-                    #print "Adding artist " + one_album.attrib['artist'].encode('utf-8')
                     self.updateIDS()
             elif not one_album.attrib['id'] in self.album_ids:
-                #print "Adding album " + one_album.attrib['name'].encode('utf-8') + " to artist " + one_album.attrib['artist'].encode('utf-8') + ": "
                 self.getArtistById(one_album.attrib['artistId']).addAlbums([one_album])
                 self.updateIDS()
                 print self.getArtistById(one_album.attrib['artistId']).recursivePrint()
@@ -1236,13 +1223,11 @@ class server:
         # Update the server that the songs use
         self.library.updateServer(self)
         # Update the library in the background
-        #thread.start_new_thread(self.library.updateLib, ())
+        thread.start_new_thread(self.library.updateLib, ())
         #t = threading.Thread(target=self.library.updateLib)
         # Start the background thread
         if options.listener:
-            t2 = threading.Thread(target=self.library.backgroundThread)
-            t2.start()
-            #thread.start_new_thread(self.library.backgroundThread, ())
+            thread.start_new_thread(self.library.backgroundThread, ())
 
 ########################################################################
 #              Methods and classes above, code below                   #
@@ -1268,8 +1253,11 @@ state.all_servers = []
 # If they only want to send commands to VLC, go ahead
 if options.passthrough:
     state.vlc = vlcinterface()
-    for line in sys.stdin.readlines():
-        print state.vlc.readWrite(line.rstrip())
+    if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
+        for line in sys.stdin.readlines():
+            print state.vlc.readWrite(line.rstrip())
+    else:
+        print "Passthrough mode only works on piped-in commands."
     sys.exit(0)
 
 # Make sure the .pysonic folder exists
@@ -1323,8 +1311,7 @@ except:
     pass
 
 # Execute piped-in commands if there are any
-mode = os.fstat(0).st_mode
-if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
+if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
     for line in sys.stdin.readlines():
         parseInput(line.rstrip())
     clearLock()
