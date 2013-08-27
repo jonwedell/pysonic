@@ -22,7 +22,7 @@ import os
 import sys
 import time
 import stat
-import thread
+import threading
 import random
 import socket
 import urllib
@@ -223,7 +223,7 @@ def live(arg=None):
     """Enter python terminal"""
     if arg:
         try:
-            exec(arg)
+            exec(arg.lstrip())
         except Exception, e:
             print "Whatever you did triggered this error: " + str(e)
     else:
@@ -585,9 +585,11 @@ class folder:
         return song_list
 
     def getFolders(self):
-        folder_list = self.children[:]
+        folder_list = []
         for child in self.children:
-            folder_list.extend(child.getFolders())
+            if not child is None:
+                folder_list.append(child)
+                folder_list.extend(child.getFolders())
         return folder_list
 
     # Implement expected methods
@@ -811,14 +813,23 @@ class library:
     def backgroundThread(self):
         """Run in the background and check for new messages on active servers"""
 
+        myfile = open("/tmp/mesg", 'w')
+
         if not hasattr(self, 'messages'):
             self.messages = []
 
         # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
-        time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
+        sleep_time = random.randint(int(options.listener*.5),int(options.listener*1.5))
+        myfile.write("Initial sleep of " + str(sleep_time) + "\n")
+        myfile.flush()
+        time.sleep(sleep_time)
 
         while True:
+            myfile.write("While True:\n")
+            myfile.flush()
             messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage')
+            myfile.write("Request complete\n")
+            myfile.flush()
             for message in messages:
                 if not message.attrib['time'] in [x['time'] for x in self.messages]:
                     mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
@@ -826,6 +837,8 @@ class library:
                     note.set_timeout(0)
                     note.show()
                     self.messages.append(message.attrib)
+            myfile.write("Processing complete, sleeping for " + str(options.listener) + "\n")
+            myfile.flush()
             time.sleep(options.listener)
 
     def updateLib(self):
@@ -1223,10 +1236,13 @@ class server:
         # Update the server that the songs use
         self.library.updateServer(self)
         # Update the library in the background
-        thread.start_new_thread(self.library.updateLib, ())
+        #thread.start_new_thread(self.library.updateLib, ())
+        #t = threading.Thread(target=self.library.updateLib)
         # Start the background thread
         if options.listener:
-            thread.start_new_thread(self.library.backgroundThread, ())
+            t2 = threading.Thread(target=self.library.backgroundThread)
+            t2.start()
+            #thread.start_new_thread(self.library.backgroundThread, ())
 
 ########################################################################
 #              Methods and classes above, code below                   #
