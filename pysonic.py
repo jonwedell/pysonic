@@ -1152,7 +1152,7 @@ class server:
         params = urllib.urlencode(params)
 
         # Encode the URL
-        tmp = self.server_url+page+"?"+params
+        tmp = self.server_url.rstrip()+page.rstrip()+"?"+params
 
         # To stream we only want the URL returned, not the data
         if page == "stream":
