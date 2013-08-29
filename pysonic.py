@@ -813,14 +813,18 @@ class library:
     def backgroundThread(self):
         """Run in the background and check for new messages on active servers"""
 
+        extrasData = {}
+
         if not hasattr(self, 'messages'):
             self.messages = []
+        else:
+            extrasData['since'] = self.messages[-1]['time']
 
         # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
         #time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
 
         #while True:
-        messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage')
+        messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage', extras=extrasData)
         for message in messages:
             if not message.attrib['time'] in [x['time'] for x in self.messages]:
                 mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
