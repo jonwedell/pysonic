@@ -150,7 +150,7 @@ def chooseServer(query=None):
                 state.server.append(one_server)
         print "Using server(s): " + str(",".join(map(lambda x:x.servername, state.server)))
     elif query:
-        queries = query.replace(","," ").split()
+        queries = set(query.replace(","," ").split())
         myres = []
         serv_hash = {}
         for x in state.all_servers:
