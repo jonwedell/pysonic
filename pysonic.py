@@ -828,7 +828,8 @@ class library:
         if not hasattr(self, 'messages'):
             self.messages = []
         else:
-            extrasData['since'] = self.messages[-1]['time']
+			if len(self.messages) > 0:
+				extrasData['since'] = self.messages[-1]['time']
 
         # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
         #time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
