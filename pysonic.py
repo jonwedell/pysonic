@@ -186,6 +186,16 @@ def chooseServer(query=None):
             print "All known servers: " + str(",".join(map(lambda x:x.servername, state.all_servers)))
             print "Type 'server all' to restore all servers, or enter server names to select."
 
+def printPrevious():
+    """Print off whatever the saved result is."""
+
+    for one_server in iterServers():
+        if not one_server.library.prev_res or len(one_server.library.prev_res) == 0:
+            print "No saved result."
+        else:
+            for item in one_server.library.prev_res:
+                print item.recursivePrint(level=1,indentations=0)
+
 def playPrevious(play=False):
     """Play whatever the previous result was"""
 
@@ -1168,7 +1178,7 @@ class server:
         # Get the server response
         try:
             stringres = urllib2.urlopen(tmp, timeout=timeout).read()
-        except urllib2.URLError as e:
+        except Exception as e:
             sys.stdout.write("Error: " + str(e) + "\n")
             sys.stdout.flush()
             return 'err'
