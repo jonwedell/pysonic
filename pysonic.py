@@ -1348,8 +1348,7 @@ while True:
         # Check for new messages
         if options.listener:
             for one_server in state.server:
-                thread.start_new_thread(one_server.library.backgroundThread, ())
-        time.sleep(.2)
+                one_server.library.backgroundThread()
 
         parseInput(command)
 
