@@ -46,7 +46,7 @@ def getHome(filename=None):
     else:
         return os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic/"))
 
-def getLock(lockfile=None):
+def getLock(lockfile=None, killsignal=0):
     if lockfile is None:
         lockfile = getHome("lock")
     else:
@@ -60,12 +60,13 @@ def getLock(lockfile=None):
         else:
             pid = int(pid)
             try:
-                os.kill(pid, 0)
+                os.kill(pid, killsignal)
             except OSError, e:
                 print "Looks like pysonic quit abnormally last run."
             else:
-                print "It looks like pysonic is already running! (Or just quit.)"
-                return False
+                if killsignal == 0:
+                    print "It looks like pysonic is already running! (Or just quit.)"
+                    return False
         os.unlink(lockfile)
 
     # Write our PID to the lockfile
@@ -94,7 +95,7 @@ def getWidth(used=0):
     """Get the remaining width of the terminal"""
 
     # Only update the width of the terminal every 5 seconds (otherwise we will fork a gazillion processes)
-    if not hasattr(state, 'cols') or state.coltime + 5 < time.time():
+    if not hasattr(state, 'cols') or state.coltime + 1 < time.time():
 
         # Check if we are outputting to a terminal style device
         mode = os.fstat(0).st_mode
@@ -252,7 +253,8 @@ def pickleLibrary(server):
     server.library.prev_res = None
 
     # Dump the pickle
-    pickle.dump(server.library, open(server.pickle,"w"), 2)
+    pickle.dump(server.library, open(getHome(".tmp.pickle"),"w"), 2)
+    os.rename(getHome(".tmp.pickle"), server.pickle)
 
 def gracefulExit(code=0):
     """Quit gracefully, saving state"""
@@ -277,8 +279,8 @@ def gracefulExit(code=0):
         open(getHome("config"), 'w').write(config)
 
         # Pickle the libraries
-        for server in state.server:
-            pickleLibrary(server)
+        #for server in state.server:
+        #    pickleLibrary(server)
 
         clearLock()
         sys.exit(code)
@@ -824,32 +826,50 @@ class library:
         """Run in the background and check for new messages on active servers"""
 
         extrasData = {}
+        getLock(self.server.servername+".listener", killsignal=15)
 
-        if not hasattr(self, 'messages'):
-            self.messages = []
+        # Try to load any sent messages
+        try:
+            self.server.messages = pickle.load(open(getHome(self.server.servername+".messages"),"rb"))
+        except IOError:
+            self.server.messages = []
+
+        if not hasattr(self.server, 'messages'):
+            self.server.messages = []
         else:
-			if len(self.messages) > 0:
-				extrasData['since'] = self.messages[-1]['time']
+            if len(self.server.messages) > 0:
+                extrasData['since'] = self.server.messages[-1]['time']
 
         # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
-        #time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
+        time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
 
-        #while True:
-        messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage', extras=extrasData)
-        for message in messages:
-            if not message.attrib['time'] in [x['time'] for x in self.messages]:
-                mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
-                note = pynotify.Notification("New message from " + message.attrib['username'], mesg)
-                note.set_timeout(0)
-                note.show()
-                self.messages.append(message.attrib)
-        #ytime.sleep(options.listener)
+        needSave = False
+
+        while True:
+            messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage', extras=extrasData)
+            for message in messages:
+                try:
+                    if not message.attrib['time'] in [x['time'] for x in self.server.messages]:
+                        needSave = True
+                        mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
+                        note = pynotify.Notification("New message from " + message.attrib['username'] + " on server " + self.server.servername, mesg)
+                        note.set_timeout(0)
+                        note.show()
+                        self.server.messages.append(message.attrib)
+                except AttributeError:
+                    return
+            if needSave:
+                pickle.dump(self.server.messages, open(getHome(self.server.servername+".messages"),"w"), 2)
+                needSave = False
+            time.sleep(options.listener)
 
     def updateLib(self):
         """Check for new albums and artists"""
 
+        updates = 0
+
         self.updateIDS()
-        new_albums = self.server.subRequest(page="getAlbumList2", list_type='album', extras={'type':'newest', 'size':500})
+        new_albums = self.server.subRequest(page="getAlbumList2", list_type='album', extras={'type':'newest', 'size':50})
 
         for one_album in new_albums:
             if not one_album.attrib['artistId'] in self.artist_ids:
@@ -859,7 +879,9 @@ class library:
                 self.getArtistById(one_album.attrib['artistId']).addAlbums([one_album])
                 self.updateIDS()
                 print self.getArtistById(one_album.attrib['artistId']).recursivePrint()
+                updates += 1
         self.lastUpdate = time.time()
+        return updates
 
     def fillArtists(self):
         """Query the server for all the artists and albums"""
@@ -1225,6 +1247,14 @@ class server:
         sys.stdout.write('Yes\n')
         sys.stdout.flush()
 
+        # Start the message listener process
+        if not options.stdin and options.listener:
+            pid = os.fork()
+            if pid == 0:
+                self.library.backgroundThread()
+                clearLock(getHome(self.servername+".listener"))
+                sys.exit(0)
+
         # Try to load the pickle, build the library if neccessary
         try:
             self.library = pickle.load(open(self.pickle,"rb"))
@@ -1234,14 +1264,19 @@ class server:
             self.library.fillArtists()
             pickleLibrary(self)
             print ""
-        except EOFError:
+        except (EOFError, pickle.UnpicklingError):
             print "Pickle file corrupt. If this error doesn't go away, delete the file: " + getHome(self.pickle)
             clearLock()
             sys.exit(2)
         # Update the server that the songs use
         self.library.updateServer(self)
         # Update the library in the background
-        thread.start_new_thread(self.library.updateLib, ())
+        #thread.start_new_thread(self.library.updateLib, ())
+        if not options.stdin:
+            if self.library.updateLib() > 0:
+                print "Saving new library."
+                pickleLibrary(self)
+
         #t = threading.Thread(target=self.library.updateLib)
         # Start the background thread
         #if options.listener:
@@ -1255,11 +1290,17 @@ class server:
 parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
 parser.add_option("--passthrough", action="store_true", dest="passthrough", default=False, help="Send commands directly to VLC without loading anything.")
-parser.add_option("--pingtime", action="store", dest="listener", type="int", default=int(60), help="How many seconds to wait between pinging server for new messages? (0 = Never ping)")
+parser.add_option("--pingtime", action="store", dest="listener", type="int", default=int(120), help="How many seconds to wait between pinging server for new messages? (0 = Never ping)")
 parser.add_option("--vlc-location", action="store", dest="player", default="/usr/bin/vlc", help="Location of VLC binary.")
 
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
+
+if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
+    options.stdin = True
+    options.pingtime = False
+else:
+    options.stdin = False
 
 # Create a class to hold the current state
 class state_obj(object):
@@ -1271,7 +1312,7 @@ state.all_servers = []
 # If they only want to send commands to VLC, go ahead
 if options.passthrough:
     state.vlc = vlcinterface()
-    if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
+    if options.stdin:
         for line in sys.stdin.readlines():
             print state.vlc.readWrite(line.rstrip())
     else:
@@ -1329,7 +1370,7 @@ except:
     pass
 
 # Execute piped-in commands if there are any
-if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
+if options.stdin:
     for line in sys.stdin.readlines():
         parseInput(line.rstrip())
     clearLock()
@@ -1345,11 +1386,6 @@ while True:
             command = raw_input(":")
         except EOFError:
             gracefulExit()
-
-        # Check for new messages
-        if options.listener:
-            for one_server in state.server:
-                one_server.library.backgroundThread()
 
         parseInput(command)
 
