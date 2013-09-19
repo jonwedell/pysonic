@@ -256,6 +256,9 @@ def pickleLibrary(server):
     pickle.dump(server.library, open(getHome(".tmp.pickle"),"w"), 2)
     os.rename(getHome(".tmp.pickle"), server.pickle)
 
+    # Re-set the server
+    server.library.updateServer(server)
+
 def gracefulExit(code=0):
     """Quit gracefully, saving state"""
 
@@ -277,10 +280,6 @@ def gracefulExit(code=0):
         for server in state.all_servers:
             config += server.printConfig()
         open(getHome("config"), 'w').write(config)
-
-        # Pickle the libraries
-        #for server in state.server:
-        #    pickleLibrary(server)
 
         clearLock()
         sys.exit(code)
