@@ -450,7 +450,7 @@ class vlcinterface:
             # Launch command line VLC in the background
             pid = os.fork()
             if pid == 0:
-                subprocess.Popen(["cvlc", "-I", "Telnet"], stderr=null, stdout=null)
+                subprocess.Popen(["cvlc", "-I", "Telnet","--telnet-password","admin"], stderr=null, stdout=null)
                 sys.exit(0)
             # Try opening the connection again
             try:
@@ -463,6 +463,8 @@ class vlcinterface:
         # Do the login dance
         self.tn.write("admin\n")
         self.read()
+	self.write("loop off\n")
+	self.read()
 
     def read(self):
         """Read from the VLC socket"""
