@@ -15,14 +15,10 @@ Coded by Jon Wedell
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-# TODO:
-# 1) Sort artists by name after updates
-
 import os
 import sys
 import time
 import stat
-import thread
 import random
 import socket
 import urllib
@@ -36,9 +32,6 @@ import ConfigParser
 import cPickle as pickle
 import xml.etree.ElementTree as ET
 from optparse import OptionParser, OptionGroup
-
-import pynotify
-pynotify.init("pysonic")
 
 def getHome(filename=None):
     if filename:
@@ -463,8 +456,8 @@ class vlcinterface:
         # Do the login dance
         self.tn.write("admin\n")
         self.read()
-	self.write("loop off\n")
-	self.read()
+        self.write("loop off\n")
+        self.read()
 
     def read(self):
         """Read from the VLC socket"""
@@ -822,47 +815,6 @@ class library:
         self.album_ids = map(lambda x:x.data_dict['id'], self.getAlbums())
         self.artist_ids = map(lambda x:x.data_dict['id'], self.getArtists())
         self.song_ids = map(lambda x:x.data_dict['id'], self.getSongs())
-
-    def backgroundThread(self):
-        """Run in the background and check for new messages on active servers"""
-
-        extrasData = {}
-        getLock(self.server.servername+".listener", killsignal=15)
-
-        # Try to load any sent messages
-        try:
-            self.server.messages = pickle.load(open(getHome(self.server.servername+".messages"),"rb"))
-        except IOError:
-            self.server.messages = []
-
-        if not hasattr(self.server, 'messages'):
-            self.server.messages = []
-        else:
-            if len(self.server.messages) > 0:
-                extrasData['since'] = self.server.messages[-1]['time']
-
-        # Sleep a random amount of time before starting so that we don't hit all the servers at the same time
-        time.sleep(random.randint(int(options.listener*.5),int(options.listener*1.5)))
-
-        needSave = False
-
-        while True:
-            messages = self.server.subRequest(page="getChatMessages", list_type='chatMessage', extras=extrasData)
-            for message in messages:
-                try:
-                    if not message.attrib['time'] in [x['time'] for x in self.server.messages]:
-                        needSave = True
-                        mesg = "%s\n%s" % (time.ctime(float(message.attrib.get('time','0'))/1000).rstrip(), message.attrib.get('message','?'))
-                        note = pynotify.Notification("New message from " + message.attrib['username'] + " on server " + self.server.servername, mesg)
-                        note.set_timeout(0)
-                        note.show()
-                        self.server.messages.append(message.attrib)
-                except AttributeError:
-                    return
-            if needSave:
-                pickle.dump(self.server.messages, open(getHome(self.server.servername+".messages"),"w"), 2)
-                needSave = False
-            time.sleep(options.listener)
 
     def updateLib(self):
         """Check for new albums and artists"""
@@ -1248,14 +1200,6 @@ class server:
         sys.stdout.write('Yes\n')
         sys.stdout.flush()
 
-        # Start the message listener process
-        if not options.stdin and options.listener:
-            pid = os.fork()
-            if pid == 0:
-                self.library.backgroundThread()
-                clearLock(getHome(self.servername+".listener"))
-                sys.exit(0)
-
         # Try to load the pickle, build the library if neccessary
         try:
             self.library = pickle.load(open(self.pickle,"rb"))
@@ -1272,26 +1216,19 @@ class server:
         # Update the server that the songs use
         self.library.updateServer(self)
         # Update the library in the background
-        #thread.start_new_thread(self.library.updateLib, ())
         if not options.stdin:
             if self.library.updateLib() > 0:
                 print "Saving new library."
                 pickleLibrary(self)
-
-        #t = threading.Thread(target=self.library.updateLib)
-        # Start the background thread
-        #if options.listener:
-        #    thread.start_new_thread(self.library.backgroundThread, ())
 
 ########################################################################
 #              Methods and classes above, code below                   #
 ########################################################################
 
 # Specify some basic information about our command
-parser = OptionParser(usage="usage: %prog",version="%prog 6.6.6",description="Enqueue songs from subsonic.")
+parser = OptionParser(usage="usage: %prog",version="%prog .9",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
 parser.add_option("--passthrough", action="store_true", dest="passthrough", default=False, help="Send commands directly to VLC without loading anything.")
-parser.add_option("--pingtime", action="store", dest="listener", type="int", default=int(120), help="How many seconds to wait between pinging server for new messages? (0 = Never ping)")
 parser.add_option("--vlc-location", action="store", dest="player", default="/usr/bin/vlc", help="Location of VLC binary.")
 
 # Options, parse 'em
