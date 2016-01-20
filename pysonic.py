@@ -19,6 +19,8 @@ import os
 import sys
 import time
 import stat
+import string
+import hashlib
 import random
 import socket
 import urllib
@@ -1089,21 +1091,22 @@ class server:
         # Build the default parameters into a reusable hash
         self.default_params = {
           'u': username,
-          'v': "1.9.0",
-          'p': "enc:" + password.encode("hex"),
+          'v': "1.13.0",
           'c': "subsonic-cli",
           'f': "xml"
         }
 
         if password == "":
             self.securepass = True
-            self.default_params['p'] = ""
+            self.password = password
         else:
             self.securepass = False
 
-        # If the password is already hex encoded don't recode it
-        if password[0:4] == "enc:":
-            self.default_params['p'] = password
+            # Store the password hex encoded on disk
+            if password[0:4] != "enc:":
+                self.password = "enc:" + password.encode("hex")
+            else:
+                self.password = password
 
         # Clean up the server address
         if server_url.count(".") == 0:
@@ -1120,9 +1123,15 @@ class server:
         self.pickle = os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", self.servername + ".pickle"))
         self.library = library(server=self)
 
+    def genPassword(self):
+        """Creates a random salt and sets the md5(password+salt) and salt in the default args."""
+
+        self.default_params['s'] = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(10))
+        self.default_params['t'] = hashlib.md5(self.password[4:].decode("hex") + self.default_params['s']).hexdigest()
+
     def printConfig(self):
         """Return a string corresponding the the config file format for this server"""
-        password = self.default_params['p']
+        password = self.password
         if self.securepass:
             password = ""
         return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.servername, self.server_url, self.default_params['u'], \
@@ -1133,6 +1142,9 @@ class server:
 
     def subRequest(self, page="ping", list_type='subsonic-response', extras={}, timeout=10, retroot=False, print_errors=True):
         """Query subsonic, parse resulting xml and return an ElementTree"""
+
+        # Generate a unique salt for this request
+        self.genPassword()
 
         # Add request specific parameters to our hash
         params = self.default_params.copy()
@@ -1183,9 +1195,8 @@ class server:
     def goOnline(self):
         """Ping the server to ensure it is online, if it is load the pickle or generate the local cache if necessary"""
 
-        if self.default_params['p'] == "":
-            password = getpass.getpass()
-            self.default_params['p'] = "enc:" + password.encode("hex")
+        if self.password == "":
+            self.password = "enc:" + getpass.getpass().encode("hex")
 
         sys.stdout.write("Checking if server " + self.servername + " is online: ")
         sys.stdout.flush()
