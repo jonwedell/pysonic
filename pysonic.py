@@ -290,10 +290,13 @@ def addServer():
     username = raw_input("Username: ")
     print "Press enter to use secure password mode. (Prompt for password each start.)"
     password = getpass.getpass()
+    bitrate = raw_input("Max bitrate (enter 0 to stream raw or press enter to use default value): ")
+    if bitrate == "":
+        bitrate = None
     enabled = user_input_maps.get(raw_input("Enabled (y/n): ").lower(),True)
     jukebox = user_input_maps.get(raw_input("Jukebox mode (y/n): ").lower(), False)
 
-    curserver = server(servername, username, password, server_url, enabled, jukebox)
+    curserver = server(servername, username, password, server_url, enabled, bitrate, jukebox)
     state.all_servers.append(curserver)
     if enabled:
         sys.stdout.write("Initializing server " + curserver.servername + ": ")
@@ -629,9 +632,15 @@ class song:
         if self.server.jukebox:
             self.server.subRequest(page="jukeboxControl", list_type='jukeboxStatus', extras={'action':'add', 'id':self.data_dict['id']})
         else:
+            extras_dict = {'id':self.data_dict['id']}
+            if self.server.bitrate == 0:
+                extras_dict['format'] = "raw"
+            elif self.server.bitrate is not None:
+                extras_dict['maxBitRate'] = self.server.bitrate
+
             return "#EXTINF:" + self.data_dict.get('duration','?').encode('utf-8') + ',' + \
             self.data_dict.get('artist','?').replace(",","").encode('utf-8') + ' | ' + self.data_dict.get('title','?').replace(",","").encode('utf-8') +\
-             "\n" + self.server.subRequest(page="stream", extras={'id':self.data_dict['id']}) + "\n"
+             "\n" + self.server.subRequest(page="stream", extras=extras_dict) + "\n"
 
     def __str__(self):
         return "%-3s: %s\n   %-4s: %s\n      %-5s: %s" % \
@@ -1085,7 +1094,7 @@ class library:
 class server:
     """This class represents a server. It stores the password and makes queries."""
 
-    def __init__(self, servername, username, password, server_url, enabled=True, jukebox=False):
+    def __init__(self, servername, username, password, server_url, enabled=True, bitrate=None, jukebox=False):
         """A server object"""
 
         # Build the default parameters into a reusable hash
@@ -1119,6 +1128,12 @@ class server:
         self.jukebox = jukebox
         self.servername = servername
         self.enabled = enabled
+
+        if bitrate == "":
+            self.bitrate = None
+        else:
+            self.bitrate = int(bitrate)
+
         self.online = False
         self.pickle = os.path.abspath(os.path.join(os.path.expanduser("~"),".pysonic", self.servername + ".pickle"))
         self.library = library(server=self)
@@ -1134,8 +1149,11 @@ class server:
         password = self.password
         if self.securepass:
             password = ""
-        return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.servername, self.server_url, self.default_params['u'], \
-                password, str(self.jukebox), str(self.enabled))
+        print_bitrate = self.bitrate
+        if self.bitrate is None:
+            print_bitrate = ""
+        return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nBitrate: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.servername, self.server_url, self.default_params['u'], \
+                password, print_bitrate, str(self.jukebox), str(self.enabled))
 
     def __str__(self):
         return self.printConfig()
@@ -1281,7 +1299,7 @@ config = ConfigParser.ConfigParser()
 config.read(getHome("config"))
 for one_server in config.sections():
 
-    curserver = server(one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), enabled=config.getboolean(one_server, 'enabled'), jukebox=config.getboolean(one_server, 'jukebox'))
+    curserver = server(one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), enabled=config.getboolean(one_server, 'enabled'), bitrate=config.get(one_server,'bitrate'), jukebox=config.getboolean(one_server, 'jukebox'))
     state.all_servers.append(curserver)
 
     if curserver.enabled:
