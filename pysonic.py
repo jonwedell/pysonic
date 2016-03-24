@@ -62,7 +62,7 @@ def getLock(lockfile=None, killsignal=0):
                 print "Looks like pysonic quit abnormally last run."
             else:
                 if killsignal == 0:
-                    print "It looks like pysonic is already running! (Or just quit.)"
+                    print "It looks like pysonic is already running!"
                     return False
         os.unlink(lockfile)
 
@@ -322,29 +322,24 @@ def pickleLibrary(server):
 def gracefulExit(code=0):
     """Quit gracefully, saving state"""
 
-    # By forking, we can seem to quit right away but take a few moments
-    #  to finish writing our state to disk
-    pid = os.fork()
+    print "\nShutting down..."
 
-    if pid == 0:
-        # Update the lock to look at our PID
-        open(getHome("lock"), "w").write(str(os.getpid()))
+    # Create the history file if it doesn't exist
+    if not os.path.isfile(getHome("history")):
+        open(getHome("history"), "a").close()
+    readline.write_history_file(getHome("history"))
 
-        # Create the history file if it doesn't exist
-        if not os.path.isfile(getHome("history")):
-            open(getHome("history"), "a").close()
-        readline.write_history_file(getHome("history"))
+    # Write the current servers to the config file
+    config = ""
+    for server in state.all_servers:
+        config += server.printConfig()
+    open(getHome("config"), 'w').write(config)
 
-        # Write the current servers to the config file
-        config = ""
-        for server in state.all_servers:
-            config += server.printConfig()
-        open(getHome("config"), 'w').write(config)
+    clearLock()
 
-        clearLock()
-        sys.exit(code)
-    else:
-        sys.exit(code)
+    print "Goodbye!"
+    sys.exit(code)
+
 
 def addServer():
     """Interactively add a new server"""
@@ -358,8 +353,9 @@ def addServer():
     bitrate = raw_input("Max bitrate (enter 0 to stream raw or press enter to use default value): ")
     enabled = user_input_maps.get(raw_input("Enabled (y/n): ").lower(),True)
     jukebox = user_input_maps.get(raw_input("Jukebox mode (y/n): ").lower(), False)
+    scrobble = user_input_maps.get(raw_input("Scrobble (y/n): ").lower(), False)
 
-    curserver = server(len(state.all_servers), server_name, user_name, password, server_url, enabled, bitrate, jukebox)
+    curserver = server(len(state.all_servers), server_name, user_name, password, server_url, enabled, bitrate, jukebox, scrobble)
     state.all_servers.append(curserver)
     if enabled:
         sys.stdout.write("Initializing server " + curserver.server_name + ": ")
@@ -444,7 +440,10 @@ def parseInput(command):
         print getNowPlaying()
     elif command == "vlc":
         print "Entering VLC shell:"
+        sys.stdout.write(":")
+        sys.stdout.flush()
         state.vlc.tn.interact()
+        print "\nReturned to pysonic shell:"
     elif command == "goto":
         state.vlc.write("goto " + arg)
         res = state.vlc.read()
@@ -523,21 +522,27 @@ class vlcinterface:
         except socket.error:
             # Send all command output to dev/null
             null = open("/dev/null", "w")
-            # Launch command line VLC in the background
-            pid = os.fork()
-            if pid == 0:
-                subprocess.Popen(["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop"], stderr=null, stdout=null)
-                sys.exit(0)
-            # Try opening the connection again
-            try:
-                time.sleep(.5)
-                self.tn = telnetlib.Telnet("localhost",4212)
-            except socket.error:
+
+            vlc_process = subprocess.Popen(["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop"], stderr=null, stdout=null)
+
+            while vlc_process.poll() == None:
+                # Try opening the connection again
+                try:
+                    self.tn = telnetlib.Telnet("localhost",4212)
+                    break
+                except socket.error:
+                    time.sleep(.01)
+                    pass
+            # The VLC process died or never opened
+            else:
                 print "Could not connect to launched VLC process."
                 gracefulExit()
 
         # Do the login dance
         self.tn.write("admin\n")
+        self.read()
+        # Make the VLC prompt match
+        self.tn.write("set prompt :\n")
         self.read()
 
     def read(self):
@@ -550,9 +555,9 @@ class vlcinterface:
             while len(read) > 0:
                 read = self.tn.read_very_eager()
                 mesg += read
-            if len(mesg) >= 4:
-                mesg = mesg[:-4]
-            elif len(mesg) == 2 and mesg == "> ":
+            if len(mesg) >= 3:
+                mesg = mesg[:-3]
+            elif len(mesg) == 1 and mesg == ":":
                 mesg = ""
             return mesg
         except (EOFError, socket.error):
@@ -709,11 +714,19 @@ class song:
             elif self.server.bitrate is not None:
                 extras_dict['maxBitRate'] = self.server.bitrate
 
-            return "#EXTINF:%s,%s - %s\n%s\n" % (\
+            if self.server.scrobble:
+                scrobble_str = "#EXTINF:0,LastFM - This scrobbles %s\n%s" % (
+                    self.data_dict.get('title','?').replace(",","").encode('utf-8'),
+                        self.server.library.getScrobbleURL(self.data_dict['id']).encode('utf-8'))
+            else:
+                scrobble_str = ""
+
+            return "#EXTINF:%s,%s - %s\n%s\n%s\n" % (\
                     self.data_dict.get('duration','?').encode('utf-8'),
                     self.data_dict.get('artist','?').replace(",","").encode('utf-8'),
                     self.data_dict.get('title','?').replace(",","").encode('utf-8'),
-                    self.server.subRequest(page="stream", extras=extras_dict))
+                    self.server.subRequest(page="stream", extras=extras_dict),
+                    scrobble_str)
 
     def __str__(self):
         return "%-3s: %s\n   %-4s: %s\n      %-5s: %s" % \
@@ -1022,6 +1035,24 @@ class library:
         """Return a list of all artists in the library"""
         return self.artists
 
+    def getScrobbleURL(self, song_id):
+        """ Returns the URL to fetch in order to scrobble a song."""
+
+        server = self.server
+        server.genMD5Password()
+
+        # Add request specific parameters to our hash
+        params = server.default_params.copy()
+        params.update({'id':song_id})
+
+        # Encode our parameters and send the request
+        params = urllib.urlencode(params)
+
+        # Encode the URL
+        url = server.server_url.rstrip()+"scrobble.view"+"?"+params
+
+        return url
+
     def getSongById(self, song_id):
         """Fetch a song from the library based on it's id"""
         for one_song in self.getSongs():
@@ -1214,7 +1245,7 @@ class library:
 class server:
     """This class represents a server. It stores the password and makes queries."""
 
-    def __init__(self, server_id, server_name, user_name, password, server_url, enabled=True, bitrate=None, jukebox=False):
+    def __init__(self, server_id, server_name, user_name, password, server_url, enabled=True, bitrate=None, jukebox=False, scrobble=False):
         """A server object"""
 
         # Build the default parameters into a reusable hash
@@ -1251,6 +1282,7 @@ class server:
             server_url = server_url + "/rest/"
         self.server_id = server_id
         self.server_url = server_url
+        self.scrobble = scrobble
         self.jukebox = jukebox
         self.server_name = server_name
         self.enabled = enabled
@@ -1278,8 +1310,8 @@ class server:
         print_bitrate = self.bitrate
         if self.bitrate is None:
             print_bitrate = ""
-        return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nBitrate: %s\nJukebox: %s\nEnabled: %s\n\n" % (self.server_name, self.server_url, self.default_params['u'], \
-                password, print_bitrate, str(self.jukebox), str(self.enabled))
+        return "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nBitrate: %s\nJukebox: %s\nEnabled: %s\nScrobble: %s\n\n" % (self.server_name, self.server_url, self.default_params['u'], \
+                password, print_bitrate, str(self.jukebox), str(self.enabled), str(self.scrobble))
 
     def __str__(self):
         return self.printConfig()
@@ -1425,7 +1457,12 @@ config = ConfigParser.ConfigParser()
 config.read(getHome("config"))
 for one_server in config.sections():
 
-    curserver = server(len(state.all_servers), one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), enabled=config.getboolean(one_server, 'enabled'), bitrate=config.get(one_server,'bitrate'), jukebox=config.getboolean(one_server, 'jukebox'))
+    try:
+        scrobble = config.getboolean(one_server, 'scrobble')
+    except ConfigParser.NoOptionError:
+        scrobble = False
+
+    curserver = server(len(state.all_servers), one_server, config.get(one_server,'username'), config.get(one_server,'password'), config.get(one_server,'host'), enabled=config.getboolean(one_server, 'enabled'), bitrate=config.get(one_server,'bitrate'), jukebox=config.getboolean(one_server, 'jukebox'), scrobble=scrobble)
     state.all_servers.append(curserver)
 
     if curserver.enabled:
