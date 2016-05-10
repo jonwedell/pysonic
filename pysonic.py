@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 """
-Coded by Jon Wedell
+Jon Wedell
 
 * THIS SOFTWARE IS PROVIDED ''AS IS'' AND ANY
 * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -378,6 +378,13 @@ def iterServers():
 
 def parseInput(command):
     """Parse the command line input"""
+
+    command = command.strip()
+    multiple = command.split(";")
+    if len(multiple) > 1:
+        for com in multiple:
+            parseInput(com)
+        return
 
     arg = False
 
