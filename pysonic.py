@@ -1527,5 +1527,5 @@ while True:
         parseInput(command)
 
     except KeyboardInterrupt:
-        print "\n\nWell aren't you impatient. Type 'q' or control-d to quit."
+        gracefulExit()
 
