@@ -529,8 +529,13 @@ class vlcinterface:
         except socket.error:
             # Send all command output to dev/null
             null = open("/dev/null", "w")
+            
+            # See where to load VLC from (for MacOS)
+            vlc_command = ["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop"]
+            if os.path.isfile("/Applications/VLC.app/Contents/MacOS/VLC"):
+				vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC", "--intf", "Telnet","--telnet-password","admin", "--no-loop"]
 
-            vlc_process = subprocess.Popen(["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop"], stderr=null, stdout=null)
+            vlc_process = subprocess.Popen(vlc_command, stderr=null, stdout=null)
 
             while vlc_process.poll() == None:
                 # Try opening the connection again
