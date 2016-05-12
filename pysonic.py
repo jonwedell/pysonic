@@ -28,6 +28,7 @@ import urllib2
 import getpass
 import readline
 import tempfile
+import platform
 import telnetlib
 import subprocess
 import ConfigParser
@@ -233,6 +234,31 @@ def printPrevious():
         else:
             for item in one_server.library.prev_res:
                 print item.recursivePrint(level=1,indentations=0)
+
+def followLyrics():
+    """ Watches the now playing song, and when it changes it prints the
+    lyrics."""
+
+    # Get the playing song
+    cur_song = getNowPlaying()
+
+    try:
+        # Loop while there is a real song
+        while (cur_song != None):
+            # Print the lyrics now
+            os.system("reset")
+            print cur_song.getLyrics()
+
+            # Check if the song has changed once a second
+            new_song = getNowPlaying()
+            while (new_song == cur_song):
+                time.sleep(1)
+                new_song = getNowPlaying()
+            cur_song = new_song
+
+    # Make sure that on control-c we return to the normal prompt
+    except KeyboardInterrupt:
+        return
 
 def printLyrics(arg):
     """ Prints the lyrics of the current song or a song specified by ID."""
@@ -472,6 +498,8 @@ def parseInput(command):
         printPrevious()
     elif command == "lyrics":
         printLyrics(arg)
+    elif command == "booklet":
+        followLyrics()
     elif command == "write":
         writeMessage(arg)
     elif command == "read":
@@ -530,10 +558,31 @@ class vlcinterface:
             # Send all command output to dev/null
             null = open("/dev/null", "w")
 
-            # See where to load VLC from (for MacOS)
-            vlc_command = ["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop", "--http-reconnect"]
-            if os.path.isfile("/Applications/VLC.app/Contents/MacOS/VLC"):
-                vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC", "--intf", "Telnet","--telnet-password","admin", "--no-loop"]
+
+            # Use the player they specify
+            if options.player:
+                vlc_command = [options.player]
+
+            # Try to figure out where the player is
+            else:
+                vlc_command = ["/usr/bin/vlc"]
+
+                # If MacOS version exists
+                if os.path.isfile("/Applications/VLC.app/Contents/MacOS/VLC"):
+                    vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC"]
+
+            # Make sure we have a valid VLC location
+            if not os.path.isfile(vlc_command[0]):
+                raise IOError("Did not find VLC binary at location: %s" % options.player)
+
+            # Figure out the interactive argument
+            if platform.system() == "Linux":
+                vlc_command.append("-I")
+            else:
+                # Mac
+                vlc_command.append("--intf")
+
+            vlc_command.extend(["Telnet", "--telnet-password", "admin", "--no-loop", "--http-reconnect"])
 
             vlc_process = subprocess.Popen(vlc_command, stderr=null, stdout=null)
 
@@ -760,7 +809,7 @@ class song:
             return "No lyrics available."
         else:
             # The HTML parser replaces things like &quot; with "
-            return lyrics.get('artist') + " | " + lyrics.get('title') + "\n" + HTMLParser().unescape(lyrics.text)
+            return lyrics.get('artist') + " | " + lyrics.get('title') + "\n" + "-"*getWidth() + "\n" + HTMLParser().unescape(lyrics.text)
 
     def recursivePrint(self, level=5, indentations=0):
         """Prints children up to level n"""
@@ -1358,6 +1407,11 @@ class server:
         params.update(extras)
 
         # Encode our parameters and send the request
+        for key in params.keys():
+            try:
+                params[key] = params[key].encode('utf-8')
+            except AttributeError:
+                pass
         params = urllib.urlencode(params)
 
         # Encode the URL
@@ -1447,7 +1501,7 @@ class server:
 parser = OptionParser(usage="usage: %prog",version="%prog .9",description="Enqueue songs from subsonic.")
 parser.add_option("--verbose", action="store_true", dest="verbose", default=False, help="More than you'll ever want to know.")
 parser.add_option("--passthrough", action="store_true", dest="passthrough", default=False, help="Send commands directly to VLC without loading anything.")
-parser.add_option("--vlc-location", action="store", dest="player", default="/usr/bin/vlc", help="Location of VLC binary.")
+parser.add_option("--vlc-location", action="store", dest="player", default=None, help="Location of VLC binary.")
 
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
