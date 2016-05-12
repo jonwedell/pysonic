@@ -531,7 +531,7 @@ class vlcinterface:
             null = open("/dev/null", "w")
 
             # See where to load VLC from (for MacOS)
-            vlc_command = ["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop"]
+            vlc_command = ["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop", "--http-reconnect"]
             if os.path.isfile("/Applications/VLC.app/Contents/MacOS/VLC"):
                 vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC", "--intf", "Telnet","--telnet-password","admin", "--no-loop"]
 
