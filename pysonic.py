@@ -1123,8 +1123,9 @@ class library:
                         if one_song.data_dict['id'] == chunk:
                             res.append(one_song)
             else:
-                if search.lower() in one_song.data_dict['title'].lower():
-                    res.append(one_song)
+                for one_song in self.getSongs():
+                    if search.lower() in one_song.data_dict['title'].lower():
+                        res.append(one_song)
         else:
             res = self.getSongs()
 
