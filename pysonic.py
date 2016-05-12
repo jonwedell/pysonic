@@ -529,11 +529,11 @@ class vlcinterface:
         except socket.error:
             # Send all command output to dev/null
             null = open("/dev/null", "w")
-            
+
             # See where to load VLC from (for MacOS)
             vlc_command = ["cvlc", "-I", "Telnet","--telnet-password","admin", "--no-loop"]
             if os.path.isfile("/Applications/VLC.app/Contents/MacOS/VLC"):
-				vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC", "--intf", "Telnet","--telnet-password","admin", "--no-loop"]
+                vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC", "--intf", "Telnet","--telnet-password","admin", "--no-loop"]
 
             vlc_process = subprocess.Popen(vlc_command, stderr=null, stdout=null)
 
@@ -756,7 +756,7 @@ class song:
         lyrics = self.server.subRequest(page="getLyrics", list_type="lyrics", extras={'artist':self.data_dict.get('artist',""), 'title':self.data_dict.get('title',"")})[0]
         if lyrics.text is None:
             return "No lyrics available."
-        elif lyrics.text.trim() == "":
+        elif lyrics.text.strip() == "":
             return "No lyrics available."
         else:
             # The HTML parser replaces things like &quot; with "
@@ -1111,15 +1111,20 @@ class library:
 
     def searchSongs(self, search=None, store_only=False):
         """Search through song names or ids for the query"""
+
         if search:
             res = []
-            for one_song in self.getSongs():
-                if search.isdigit():
-                    if one_song.data_dict['id'] == search:
-                        res.append(one_song)
-                else:
-                    if search.lower() in one_song.data_dict['title'].lower():
-                        res.append(one_song)
+
+            chunks = search.split(" ")
+            # They are searching by one or more ID
+            if all(x.isdigit() for x in chunks):
+                for chunk in chunks:
+                    for one_song in self.getSongs():
+                        if one_song.data_dict['id'] == chunk:
+                            res.append(one_song)
+            else:
+                if search.lower() in one_song.data_dict['title'].lower():
+                    res.append(one_song)
         else:
             res = self.getSongs()
 
@@ -1139,13 +1144,19 @@ class library:
 
     def searchAlbums(self, search=None):
         """Search through albums names or ids for the query"""
+
         if search:
             res = []
-            for one_album in self.getAlbums():
-                if search.isdigit():
-                    if one_album.data_dict['id'] == search:
-                        res.append(one_album)
-                else:
+
+            # See if they are adding multiple album by ID
+            chunks = search.split(" ")
+            if all(x.isdigit() for x in chunks):
+                for chunk in chunks:
+                    for one_album in self.getAlbums():
+                        if one_album.data_dict['id'] == chunk:
+                            res.append(one_album)
+            else:
+                for one_album in self.getAlbums():
                     if search.lower() in one_album.data_dict['name'].lower():
                         res.append(one_album)
         else:
@@ -1165,14 +1176,21 @@ class library:
 
     def searchArtists(self, search=None):
         """Search through artists names or ids for the query"""
+
         if search:
             res = []
 
-            for one_artist in self.getArtists():
-                if search.isdigit():
-                    if one_artist.data_dict['id'] == search:
-                        res.append(one_artist)
-                else:
+            chunks = search.split(" ")
+            # They are searching by one or more ID
+            if all(x.isdigit() for x in chunks):
+                for chunk in chunks:
+                    for one_artist in self.getArtists():
+                        if one_artist.data_dict['id'] == chunk:
+                            res.append(one_artist)
+
+            # They are searching by name
+            else:
+                for one_artist in self.getArtists():
                     if search.lower() in one_artist.data_dict['name'].lower():
                         res.append(one_artist)
         else:
