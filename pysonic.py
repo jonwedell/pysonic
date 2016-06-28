@@ -515,7 +515,7 @@ def parseInput(command):
    'server' - switch active servers. Run with no args for help.
    'vlc' - drop into a direct connection with the VLC CLI
    'live' - drop into a python shell
-   'quit', 'q', or ctrl-d - exit the CLI.
+   'quit', 'q', 'exit', or ctrl-d - exit the CLI.
 Querying and playing:
    'artist [ID|query]' - display artists matching ID or query.
    'album [ID|query]' - displays albums matching ID or query.
@@ -535,7 +535,7 @@ Playlist management:
    'playing' - shows what is currently playing on the local machine.
    'pause/resume' - pause or play music
    'vlchelp' - display additional help on VLC commands."""
-    elif command == "quit" or command == "q":
+    elif command == "quit" or command == "q" or command == "exit":
         print " See ya!"
         gracefulExit()
     elif command == "":
