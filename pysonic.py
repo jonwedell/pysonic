@@ -38,6 +38,7 @@ from optparse import OptionParser
 PY3 = (sys.version_info[0] == 3)
 
 # Python version dependent loads
+#pylint: disable=wrong-import-order, ungrouped-imports
 if PY3:
     import pickle
     import configparser
@@ -1064,7 +1065,7 @@ class Album(object):
     def __len__(self):
         return len(self.songs)
     def __str__(self):
-        return "%-3s: %s%s\n" % (clean_get(self, 'artistId'),
+        return "%-3s: %s\n%s" % (clean_get(self, 'artistId'),
                                  clean_get(self, 'artist')[0:get_width(5)],
                                  self.recursive_print(1, 1))
 
