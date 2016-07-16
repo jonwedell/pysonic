@@ -24,6 +24,7 @@ import stat
 import string
 import hashlib
 import random
+import signal
 import socket
 import getpass
 import readline
@@ -45,10 +46,10 @@ if PY3:
     from html.parser import HTMLParser
     from urllib.parse import urlencode
     from urllib.request import urlopen
-    from urllib.error import HTTPError
+    from urllib.error import HTTPError, URLError
 else:
     from urllib import urlencode
-    from urllib2 import urlopen, HTTPError
+    from urllib2 import urlopen, HTTPError, URLError
     import cPickle as pickle
     from HTMLParser import HTMLParser
     import ConfigParser as configparser
@@ -84,9 +85,9 @@ def clean_get(obj, key):
     results. """
 
     if PY3:
-        return obj.data_dict.get(key, '?').replace(",", "")
+        return obj.data_dict.get(key, '?')
     else:
-        return obj.data_dict.get(key, '?').replace(",", "").encode('utf-8')
+        return obj.data_dict.get(key, '?').encode('utf-8')
 
 def get_lock(lockfile=None, killsignal=0):
     """ Opens a lock file to make sure that only one instance of
@@ -138,24 +139,21 @@ def clear_lock(lockfile=None):
         return False
     return True
 
+def update_width(signal, frame):
+    """ The terminal has resized, so figure out the new size."""
+
+    # Check if we are outputting to a terminal style device
+    mode = os.fstat(0).st_mode
+    if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
+        state['cols'] = 10000
+    else:
+        state['cols'] = os.popen('stty size', 'r').read().split()[1]
+
 def get_width(used=0):
     """Get the remaining width of the terminal. """
 
-    # Only update the width of the terminal every 5 seconds
-    # (otherwise we will fork a gazillion processes)
-    if not hasattr(state, 'cols') or state['coltime'] + 1 < time.time():
-
-        # Check if we are outputting to a terminal style device
-        mode = os.fstat(0).st_mode
-        if stat.S_ISFIFO(mode) or stat.S_ISREG(mode):
-            state['cols'] = 10000
-        else:
-            state['cols'] = os.popen('stty size', 'r').read().split()[1]
-        # Update the setting time
-        state['coltime'] = time.time()
-
     # Return the remaining terminal width
-    return int(state['cols'])-used
+    return int(state['cols']) - used
 
 def print_messages():
     """Get chat messages. """
@@ -218,10 +216,12 @@ def get_now_playing():
     """ Returns the song that is currently playing. """
 
     stream_info = state['vlc'].read_write("status")
-    if "state stopped" in stream_info:
+
+    try:
+        stream_start = stream_info.index("?") + 1
+    except ValueError:
         return None
 
-    stream_start = stream_info.index("?") + 1
     stream_end = stream_info.index(")")
     stream_info = stream_info[stream_start:stream_end].split("&")
     stream_dict = {}
@@ -981,7 +981,7 @@ class Song(object):
                                         "-"*get_width(),
                                         HTMLParser().unescape(lyrics.text))
 
-    def recursive_print(self, indentations=0):
+    def recursive_print(self, indentations=0, dummy_level=0):
         """Prints children up to level n. """
 
         max_len = get_width(7+3*indentations)
@@ -1650,10 +1650,10 @@ class SubServer(object):
         # Get the server response
         try:
             stringres = urlopen(tmp, timeout=timeout).read()
-        except socket.timeout:
+        except (socket.timeout, URLError):
             try:
                 stringres = urlopen(tmp, timeout=timeout).read()
-            except socket.timeout:
+            except (socket.timeout, URLError):
                 print("Request to subsonic server timed out twice.")
                 graceful_exit()
         if PY3:
@@ -1731,6 +1731,9 @@ class SubServer(object):
 #              Methods and classes above, code below                   #
 ########################################################################
 
+# Update terminal size when window is resized
+signal.signal(signal.SIGWINCH, update_width)
+
 # Specify some basic information about our command
 parser = OptionParser(usage="usage: %prog", version="%prog .9",
                       description="Enqueue songs from subsonic.")
@@ -1760,7 +1763,6 @@ state['vlc'] = None
 state['server'] = []
 state['all_servers'] = []
 state['cols'] = 80
-state['coltime'] = time.time()
 
 # If they only want to send commands to VLC, go ahead
 if options.passthrough:
