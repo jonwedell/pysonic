@@ -1506,7 +1506,7 @@ class Library(object):
             res = random.sample(albums, number)
         elif albtype == 'newest':
             key = lambda k: k.data_dict.get('created', '?')
-            res = sorted(self.get_albums(), reverse=True, key=key)[-number:]
+            res = sorted(self.get_albums(), reverse=True, key=key)[:number]
         else:
             raise ValueError("Invalid type to search for.")
 
