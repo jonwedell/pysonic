@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Jon Wedell
@@ -1053,11 +1053,11 @@ class Album(object):
     def special_print(self):
         """ Used to print albums in list rather than heirarchical format. """
 
-        format_str = "%-3s: %-20s %-3s: %-3s"
+        format_str = "%4s: %-20s %-3s: %-3s"
         return format_str % (clean_get(self, 'artistId'),
                              clean_get(self, 'artist')[0:20],
                              clean_get(self, 'id'),
-                             clean_get(self, 'name')[0:get_width(31)])
+                             clean_get(self, 'name')[0:get_width(35)])
 
     # Implement expected methods
     def __iter__(self):
@@ -1844,6 +1844,10 @@ if options.stdin:
         parse_input(line.rstrip())
     clear_lock()
     sys.exit(0)
+
+# First run any command line commands
+for cmd in cmd_input:
+    parse_input(cmd)
 
 # Enter our loop, let them issue commands!
 while True:
