@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+import os
 import requests
 from bs4 import BeautifulSoup
 
+_this_dir = os.path.dirname(os.path.realpath(__file__))
 try:
-    token = open("genius_api_key", "r").read()
+    token = open(os.path.join(_this_dir, "genius_api_key"), "r").read()
 except IOError:
     token = None
 base_url = "https://api.genius.com"
