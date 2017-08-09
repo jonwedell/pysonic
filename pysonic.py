@@ -54,6 +54,8 @@ else:
     from HTMLParser import HTMLParser
     import ConfigParser as configparser
 
+from lyrics import get_lyrics as genius_lyrics
+
 # Python version dependant redefines
 if not PY3:
     input = raw_input
@@ -966,20 +968,17 @@ class Song(object):
         """ Returns the lyrics of the song as a string as provided by
         the subsonic server. """
 
-        extras = {'artist':clean_get(self, 'artist'),
-                  'title':clean_get(self, 'title')}
-        lyrics = self.server.sub_request(page="getLyrics", list_type="lyrics",
-                                         extras=extras)[0]
-        if lyrics.text is None:
-            return "No lyrics available."
-        elif lyrics.text.strip() == "":
-            return "No lyrics available."
+        try:
+            artist, title, lyrics = genius_lyrics(clean_get(self, 'title'),
+                                                  clean_get(self, 'artist'))
+        except Exception as e:
+            return "Error when fetching lyrics: %s" % str(e)
+
+        if lyrics:
+            return "%s | %s\n%s\n%s" % (artist, title, "-"*get_width(),
+                                        lyrics)
         else:
-            # The HTML parser replaces things like &quot; with "
-            return "%s | %s\n%s\n%s" % (lyrics.get('artist'),
-                                        lyrics.get('title'),
-                                        "-"*get_width(),
-                                        HTMLParser().unescape(lyrics.text))
+            return "No lyrics available."
 
     def recursive_print(self, indentations=0, dummy_level=0):
         """Prints children up to level n. """
