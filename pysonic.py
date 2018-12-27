@@ -32,7 +32,7 @@ import tempfile
 import platform
 import telnetlib
 import subprocess
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ETree
 from optparse import OptionParser
 
 # Determine if we are running in python3
@@ -129,13 +129,8 @@ def get_lock(lockfile=None, killsignal=0):
     return True
 
 
-def clear_lock(lockfile=None):
+def clear_lock():
     """ Removes the pysonic lock file. """
-
-    if lockfile is None:
-        lockfile = get_home("lock")
-    else:
-        lockfile = get_home(lockfile)
 
     lockfile = get_home("lock")
     try:
@@ -146,7 +141,7 @@ def clear_lock(lockfile=None):
     return True
 
 
-def update_width(signal, frame):
+def update_width():
     """ The terminal has resized, so figure out the new size."""
 
     # Check if we are outputting to a terminal style device
@@ -241,6 +236,7 @@ def get_now_playing():
         key, value = item.split("=")
         stream_dict[key] = value.strip()
 
+    print(stream_dict)
     stream_id = int(stream_dict['sid'])
     song_id = int(stream_dict['id'])
 
@@ -577,6 +573,9 @@ def parse_input(command):
     elif command == "song":
         for one_server in iter_servers():
             one_server.library.search_songs(arg)
+    elif command == "playlist":
+        for one_server in iter_servers():
+            one_server.library.search_playlists(arg)
     elif command == "rebuild":
         for one_server in iter_servers():
             os.unlink(get_home(one_server.pickle))
@@ -603,7 +602,7 @@ def parse_input(command):
     elif command == "next":
         state['vlc'].write("next")
         print(get_now_playing())
-    elif command == "playlist":
+    elif command == "list":
         print(state['vlc'].read_write("playlist"))
     elif command == "prev":
         state['vlc'].write("prev")
@@ -661,6 +660,7 @@ Querying and playing:
    'artist [ID|query]' - display artists matching ID or query.
    'album [ID|query]' - displays albums matching ID or query.
    'song [ID|query]' - display songs matching ID or query.
+   'playlist [ID|query]' - display playlists matching ID or query.
    'similar [song] [numresults] - displays a list of songs similar to
 the specified song.
    'play [artist|album|song query|ID]' - play whatever the artist,
@@ -674,7 +674,7 @@ album, or song query turns up. (Queue previous result if no arguments.)
    'lyrics [songID]' - print the lyrics of the currently playing song
 or the song specified by songID.
 Playlist management:
-   'playlist' - display the current playlist
+   'list' - display the current playlist
    'clear' - clear the playlist
    'goto ID' - go to item with ID in playlist
    'next/prev' - skip to the next or previous track
@@ -925,6 +925,49 @@ class Folder(object):
         return self.recursive_print(1)
 
 
+class Playlist(object):
+    """ A class for a playlist. """
+
+    id = None
+    name = None
+    songs = []
+
+    def __init__(self, data_dict, server=None):
+        """We need the dictionary to create a song. """
+
+        self.server = server
+        if data_dict is None:
+            raise ValueError('You must pass a playlist element to create a playlist.')
+        else:
+            self.id = data_dict.attrib['id']
+            self.name = data_dict.attrib['name']
+            self.songs = []
+
+            self.songs = [self.server.library.get_song_by_id(x.attrib['id']) for x in
+                          self.server.sub_request(page="getPlaylist", list_type="entry",
+                                                  extras={'id': self.id})]
+
+    def play_string(self):
+        """ Create a play string for the playlist. """
+
+        playlist_string = ""
+        for song in self.songs:
+            playlist_string += song.play_string()
+        return playlist_string
+
+    def __str__(self):
+        return "%-1s: %s" % (self.id, self.name)
+
+    def recursive_print(self, level=0, indentations="ignored"):
+        if level == 0:
+            return "%-1s: %s" % (self.id, self.name)
+        else:
+            res = self.recursive_print(0)
+            for song in self.songs:
+                res += '\n' + song.recursive_print(1, 1)
+            return res
+
+
 class Song(object):
     """This class implements the logical concept of a song. """
 
@@ -989,7 +1032,7 @@ class Song(object):
     def get_details(self):
         """Print in a columnar mode that works well with multiple songs. """
 
-        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % ( \
+        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (
             clean_get(self, 'id'),
             clean_get(self, 'albumId'),
             clean_get(self, 'artistId'),
@@ -1142,7 +1185,7 @@ class Artist(object):
 
             if len(data_dict) == 1:
                 self.data_dict = data_dict[0].attrib
-                self.add_albums(data_dict[0].getchildren())
+                self.add_albums(list(data_dict[0]))
             else:
                 print(data_dict)
                 raise ValueError('The root you passed includes more than one'
@@ -1428,6 +1471,33 @@ class Library(object):
         else:
             print_song_list(res)
 
+    def search_playlists(self, search=None):
+        """Search through playlists. """
+
+        matches = []
+
+        def id_sort(playlist):
+            return playlist.attrib['id']
+        res = sorted(self.server.sub_request(page="getPlaylists", list_type="playlist"), key=id_sort)
+
+        # ID search
+        if search and all(x.isdigit() for x in search):
+            for x in res:
+                if x.attrib['id'] == search:
+                    self.prev_res = [Playlist(x, self.server)]
+                    print(self.prev_res[0].recursive_print(1))
+        else:
+            for x in res:
+                if not search or search.lower() in x.attrib['name'].lower():
+                    the_playlist = Playlist(x, self.server)
+                    matches.append(the_playlist)
+            self.prev_res = matches
+            if len(self.prev_res) == 1:
+                print(self.prev_res[0].recursive_print(1))
+            else:
+                for match in self.prev_res:
+                    print(match.recursive_print())
+
     def search_albums(self, search=None):
         """Search through albums names or ids for the query. """
 
@@ -1702,7 +1772,7 @@ class SubServer(object):
             stringres = stringres.decode("utf-8")
 
         # Parse the XML
-        root = ET.fromstring(stringres)
+        root = ETree.fromstring(stringres)
 
         if options.verbose:
             print(stringres)
