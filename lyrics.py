@@ -4,13 +4,14 @@ import os
 import requests
 from bs4 import BeautifulSoup
 
-_this_dir = os.path.dirname(os.path.realpath(__file__))
 try:
-    token = open(os.path.join(_this_dir, "genius_api_key"), "r").read()
+    user_home_path = os.path.abspath(os.path.join(os.path.expanduser("~"), ".pysonic/"))
+    token = open(os.path.join(user_home_path, "genius_api_key"), "r").read()
 except IOError:
     token = None
 base_url = "https://api.genius.com"
 headers = {'Authorization': 'Bearer %s' % token}
+
 
 def _lyrics_from_song_api_path(song_api_path):
     song_url = base_url + song_api_path
@@ -28,11 +29,13 @@ def _lyrics_from_song_api_path(song_api_path):
 
     return html.find("div", class_="lyrics").get_text()
 
+
 def get_lyrics(song_title, artist_name):
     """ Return the lyrics for a given song and artist. """
 
     if not token:
-        raise ValueError("Please put your Genius API token in the file 'genius_api_key' and restart in order to fetch lyrics.")
+        raise ValueError("Please put your Genius API token in the file "
+                         "'genius_api_key' and restart in order to fetch lyrics.")
 
     search_url = base_url + "/search"
     data = {'q': song_title + " " + artist_name}
@@ -47,4 +50,4 @@ def get_lyrics(song_title, artist_name):
         title = song_info["result"]["title"]
         return artist, title, _lyrics_from_song_api_path(song_api_path).strip()
 
-    return None,None,None
+    return None, None, None
