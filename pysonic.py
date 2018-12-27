@@ -39,11 +39,10 @@ from optparse import OptionParser
 PY3 = (sys.version_info[0] == 3)
 
 # Python version dependent loads
-#pylint: disable=wrong-import-order, ungrouped-imports
+# pylint: disable=wrong-import-order, ungrouped-imports
 if PY3:
     import pickle
     import configparser
-    from html.parser import HTMLParser
     from urllib.parse import urlencode
     from urllib.request import urlopen
     from urllib.error import HTTPError, URLError
@@ -52,7 +51,6 @@ else:
     from urllib import urlencode
     from urllib2 import urlopen, HTTPError, URLError
     import cPickle as pickle
-    from HTMLParser import HTMLParser
     import ConfigParser as configparser
 
 from lyrics import get_lyrics as genius_lyrics
@@ -60,6 +58,7 @@ from lyrics import get_lyrics as genius_lyrics
 # Python version dependant redefines
 if not PY3:
     input = raw_input
+
 
 # Module level functions
 
@@ -76,11 +75,13 @@ def get_home(filename=None):
     else:
         return home_dir
 
+
 def salt_generator(size=10, chars=string.ascii_uppercase + string.digits):
     """ Generates a random ASCII string (or string from whatever source
     you provide in chars) of length size. """
 
     return ''.join(random.SystemRandom().choice(chars) for _ in range(size))
+
 
 def clean_get(obj, key):
     """ Returns a key with the song dictionary with the necessary
@@ -91,6 +92,7 @@ def clean_get(obj, key):
         return obj.data_dict.get(key, '?')
     else:
         return obj.data_dict.get(key, '?').encode('utf-8')
+
 
 def get_lock(lockfile=None, killsignal=0):
     """ Opens a lock file to make sure that only one instance of
@@ -105,7 +107,7 @@ def get_lock(lockfile=None, killsignal=0):
     if os.path.isfile(lockfile):
         pid = open(lockfile, "r").read().strip()
         if not pid.isdigit():
-            print("Corrupt PID in lock file (" +str(pid)+ "). Clearing.")
+            print("Corrupt PID in lock file (" + str(pid) + "). Clearing.")
         else:
             pid = int(pid)
             try:
@@ -126,6 +128,7 @@ def get_lock(lockfile=None, killsignal=0):
         return False
     return True
 
+
 def clear_lock(lockfile=None):
     """ Removes the pysonic lock file. """
 
@@ -142,6 +145,7 @@ def clear_lock(lockfile=None):
         return False
     return True
 
+
 def update_width(signal, frame):
     """ The terminal has resized, so figure out the new size."""
 
@@ -152,11 +156,13 @@ def update_width(signal, frame):
     else:
         state['cols'] = os.popen('stty size', 'r').read().split()[1]
 
+
 def get_width(used=0):
     """Get the remaining width of the terminal. """
 
     # Return the remaining terminal width
     return int(state['cols']) - used
+
 
 def print_messages():
     """Get chat messages. """
@@ -167,12 +173,13 @@ def print_messages():
                                           list_type='chatMessage')
         # Convert time from unix time to readable time
         for message in messages:
-            mtime = time.ctime(float(message.attrib['time'])/1000).rstrip()
+            mtime = time.ctime(float(message.attrib['time']) / 1000).rstrip()
             message.attrib['time'] = mtime
             print("   At %s %s wrote %s." %
                   (message.attrib.get('time', '?'),
                    message.attrib.get('username', '?'),
                    message.attrib.get('message', '?')))
+
 
 def write_message(message):
     """Write a chat message. """
@@ -181,9 +188,10 @@ def write_message(message):
         print("On server: " + one_server.server_name)
         messages = one_server.sub_request(page="addChatMessage",
                                           list_type='subsonic-response',
-                                          extras={'message':message})
+                                          extras={'message': message})
         if messages[0].attrib['status'] == 'ok':
             print("   Successfully wrote message: '" + str(message) + "'")
+
 
 def get_similar(arg):
     """ Get a list of similar songs or similar artists. """
@@ -215,6 +223,7 @@ def get_similar(arg):
         print("Please specify 'song', 'artist', or a number of similar songs "
               "to the now playing song to return.")
 
+
 def get_now_playing():
     """ Returns the song that is currently playing. """
 
@@ -237,6 +246,7 @@ def get_now_playing():
 
     return state['all_servers'][stream_id].library.get_song_by_id(song_id)
 
+
 def now_playing():
     """Get the now playing lists. """
 
@@ -252,6 +262,7 @@ def now_playing():
                 one_person.attrib.get('artist', '?'),
                 one_person.attrib.get('id', '?')))
             one_server.library.get_song_by_id(one_person.attrib['id'])
+
 
 def choose_server(query=None):
     """Choose whether to display one server or all servers. """
@@ -312,6 +323,7 @@ def choose_server(query=None):
             print("Type 'server all' to restore all servers, or enter server"
                   " names to select.")
 
+
 def print_previous():
     """Print off whatever the saved result is. """
 
@@ -322,6 +334,7 @@ def print_previous():
         else:
             for item in one_server.library.prev_res:
                 print(item.recursive_print(level=1, indentations=0))
+
 
 def follow_lyrics():
     """ Watches the now playing song, and when it changes it prints the
@@ -348,6 +361,7 @@ def follow_lyrics():
     except KeyboardInterrupt:
         return
 
+
 def print_lyrics(arg):
     """ Prints the lyrics of the current song or a song specified by
     ID. """
@@ -372,6 +386,7 @@ def print_lyrics(arg):
             print(get_now_playing().get_lyrics())
         else:
             print("Nothing is playing.")
+
 
 def play_previous(play=False):
     """Play whatever the previous result was. """
@@ -407,6 +422,7 @@ def play_previous(play=False):
     time.sleep(.1)
     state['vlc'].write("play")
 
+
 def live():
     """Enter interactive python terminal. """
 
@@ -415,6 +431,7 @@ def live():
     vars.update(locals())
     shell = code.InteractiveConsole(vars)
     shell.interact()
+
 
 def pickle_library(cur_server):
     """ Pickles the song library and writes it to disk. """
@@ -432,6 +449,7 @@ def pickle_library(cur_server):
 
     # Re-set the server
     cur_server.library.update_server(cur_server)
+
 
 def graceful_exit(code=0):
     """Quit gracefully, saving state. """
@@ -458,8 +476,14 @@ def graceful_exit(code=0):
 def add_server():
     """Interactively add a new server. """
 
-    user_input_maps = {'y':True, 'yes':True, 't':True, 'true':True, 'n':False,
-                       'no':True, 'f':False, 'false':False}
+    user_input_maps = {'y': True,
+                       'yes': True,
+                       't': True,
+                       'true': True,
+                       'n': False,
+                       'no': True,
+                       'f': False,
+                       'false': False}
 
     server_name = ''.join(input("Informal name (one word is best):"
                                 " ").split())
@@ -486,6 +510,7 @@ def add_server():
         if curserver.online:
             state['server'].append(curserver)
 
+
 def iter_servers():
     """A generator that goes through the active servers. """
 
@@ -497,6 +522,7 @@ def iter_servers():
         if show_cur_server:
             print("On server: " + one_server.server_name)
         yield one_server
+
 
 def print_song_list(song_list):
     """ Nicely formats and prints a list of songs. """
@@ -516,6 +542,7 @@ def print_song_list(song_list):
         for one_song in song_list:
             print(one_song)
 
+
 def parse_input(command):
     """Parse the command line input. """
 
@@ -530,12 +557,12 @@ def parse_input(command):
 
     # Parse the command
     if command.count(' ') > 0:
-        arg = command[command.index(' ')+1:]
+        arg = command[command.index(' ') + 1:]
         command = command[:command.index(' ')]
 
     # Display how we parsed the command
     if options.verbose:
-        print(str(command)+":"+str(arg))
+        print(str(command) + ":" + str(arg))
 
     # Interpret the command
     if command == "artist":
@@ -666,6 +693,7 @@ Playlist management:
         else:
             print(state['vlc'].read_write(command))
 
+
 class VLCInterface(object):
     """Allows for interfacing (or creating and then interfacing)
     with local VLC instance. """
@@ -766,6 +794,7 @@ class VLCInterface(object):
         self.write(str(message))
         return self.read()
 
+
 class Folder(object):
     """This class implements the logical concept of a folder."""
 
@@ -785,7 +814,7 @@ class Folder(object):
         if fold_id:
             childrens = self.server.sub_request(page="getMusicDirectory ",
                                                 list_type='child',
-                                                extras={'id':fold_id})
+                                                extras={'id': fold_id})
             for child in childrens:
                 if (child.attrib['isDir'] == "true" and
                         child.attrib['title'][-5:] != ".flac" and
@@ -855,15 +884,15 @@ class Folder(object):
                 name_title = name_title[0:get_width(6)]
             res = "%-4s: %s" % (clean_get(self, 'id'), name_title)
             if indentations > 0:
-                res = "   "*indentations + res
+                res = "   " * indentations + res
         else:
-            res = "   "*indentations
+            res = "   " * indentations
 
         if level > 0:
             for child in self.children:
-                res += "\n" + child.recursive_print(level-1, indentations+1)
+                res += "\n" + child.recursive_print(level - 1, indentations + 1)
             for one_song in self.songs:
-                res += "\n" + one_song.recursive_print(level-1, indentations+1)
+                res += "\n" + one_song.recursive_print(level - 1, indentations + 1)
         return res
 
     def get_songs(self):
@@ -888,10 +917,13 @@ class Folder(object):
     # Implement expected methods
     def __iter__(self):
         return iter(self.children)
+
     def __len__(self):
         return len(self.children)
+
     def __str__(self):
         return self.recursive_print(1)
+
 
 class Song(object):
     """This class implements the logical concept of a song. """
@@ -920,11 +952,11 @@ class Song(object):
         if self.server.jukebox:
             self.server.sub_request(page="jukeboxControl",
                                     list_type='jukeboxStatus',
-                                    extras={'action':'add',
-                                            'id':self.data_dict['id']
-                                           })
+                                    extras={'action': 'add',
+                                            'id': self.data_dict['id']
+                                            })
         else:
-            extras_dict = {'id':self.data_dict['id']}
+            extras_dict = {'id': self.data_dict['id']}
             if self.server.bitrate == 0:
                 extras_dict['format'] = "raw"
             elif self.server.bitrate is not None:
@@ -938,32 +970,32 @@ class Song(object):
             else:
                 scrobble_str = ""
 
-            return "#EXTINF:%s,%s - %s\n%s\n%s\n" % (\
-                    clean_get(self, 'duration'),
-                    clean_get(self, 'artist'),
-                    clean_get(self, 'title'),
-                    self.server.sub_request(page="stream", extras=extras_dict),
-                    scrobble_str)
+            return "#EXTINF:%s,%s - %s\n%s\n%s\n" % (
+                clean_get(self, 'duration'),
+                clean_get(self, 'artist'),
+                clean_get(self, 'title'),
+                self.server.sub_request(page="stream", extras=extras_dict),
+                scrobble_str)
 
     def __str__(self):
         return "%-3s: %s\n   %-4s: %s\n      %-5s: %s" % \
-                (clean_get(self, 'artistId'),
-                 clean_get(self, 'artist')[0:get_width(5)],
-                 clean_get(self, 'albumId'),
-                 clean_get(self, 'album')[0:get_width(9)],
-                 clean_get(self, 'id'),
-                 clean_get(self, 'title')[0:get_width(13)])
+               (clean_get(self, 'artistId'),
+                clean_get(self, 'artist')[0:get_width(5)],
+                clean_get(self, 'albumId'),
+                clean_get(self, 'album')[0:get_width(9)],
+                clean_get(self, 'id'),
+                clean_get(self, 'title')[0:get_width(13)])
 
     def get_details(self):
         """Print in a columnar mode that works well with multiple songs. """
 
-        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (\
-                clean_get(self, 'id'),
-                clean_get(self, 'albumId'),
-                clean_get(self, 'artistId'),
-                clean_get(self, 'title')[:20],
-                clean_get(self, 'album')[:20],
-                clean_get(self, 'artist')[:get_width(61)])
+        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % ( \
+            clean_get(self, 'id'),
+            clean_get(self, 'albumId'),
+            clean_get(self, 'artistId'),
+            clean_get(self, 'title')[:20],
+            clean_get(self, 'album')[:20],
+            clean_get(self, 'artist')[:get_width(61)])
 
     def get_lyrics(self):
         """ Returns the lyrics of the song as a string as provided by
@@ -976,7 +1008,7 @@ class Song(object):
             return "Error when fetching lyrics: %s" % str(e)
 
         if lyrics:
-            return "%s | %s\n%s\n%s" % (artist, title, "-"*get_width(),
+            return "%s | %s\n%s\n%s" % (artist, title, "-" * get_width(),
                                         lyrics)
         else:
             return "No lyrics available."
@@ -984,12 +1016,13 @@ class Song(object):
     def recursive_print(self, indentations=0, dummy_level=0):
         """Prints children up to level n. """
 
-        max_len = get_width(7+3*indentations)
+        max_len = get_width(7 + 3 * indentations)
         res = "%-5s: %s" % (clean_get(self, 'id'),
                             clean_get(self, 'title')[0:max_len])
         if indentations > 0:
-            res = "   "*indentations + res
+            res = "   " * indentations + res
         return res
+
 
 class Album(object):
     """This class implements the logical concept of an album. """
@@ -1006,7 +1039,7 @@ class Album(object):
             self.data_dict = data_dict
             songs = self.server.sub_request(page="getAlbum",
                                             list_type='song',
-                                            extras={'id':self.data_dict['id']})
+                                            extras={'id': self.data_dict['id']})
             if not server.library.initialized:
                 sys.stdout.write('.')
                 sys.stdout.flush()
@@ -1041,13 +1074,13 @@ class Album(object):
         """Prints children up to level n. """
 
         album_name = clean_get(self, 'name')
-        album_name = album_name[0:get_width(6+3*indentations)]
+        album_name = album_name[0:get_width(6 + 3 * indentations)]
         res = "%-4s: %s" % (clean_get(self, 'id'), album_name)
         if indentations > 0:
-            res = "   "*indentations + res
+            res = "   " * indentations + res
         if level > 0:
             for one_song in self.songs:
-                res += "\n" + one_song.recursive_print(indentations+1)
+                res += "\n" + one_song.recursive_print(indentations + 1)
         return res
 
     def special_print(self):
@@ -1062,8 +1095,10 @@ class Album(object):
     # Implement expected methods
     def __iter__(self):
         return iter(self.songs)
+
     def __len__(self):
         return len(self.songs)
+
     def __str__(self):
         return "%-3s: %s\n%s" % (clean_get(self, 'artistId'),
                                  clean_get(self, 'artist')[0:get_width(5)],
@@ -1099,11 +1134,11 @@ class Artist(object):
             # Fetch the whole XML tree for this artist
             data_dict = self.server.sub_request(page="getArtist",
                                                 list_type='album',
-                                                extras={'id':artist_id},
+                                                extras={'id': artist_id},
                                                 retroot=True)
 
             if data_dict == "err":
-                return None
+                raise ValueError("Could not get artist data from server.")
 
             if len(data_dict) == 1:
                 self.data_dict = data_dict[0].attrib
@@ -1134,21 +1169,23 @@ class Artist(object):
     def recursive_print(self, level=3, indentations=0):
         """Prints children up to level n. """
 
-        max_len = get_width(5+3*indentations)
+        max_len = get_width(5 + 3 * indentations)
         res = "%-3s: %s" % (clean_get(self, 'id'),
                             clean_get(self, 'name')[0:max_len])
         if indentations > 0:
-            res = "   "*indentations + res
+            res = "   " * indentations + res
         if level > 0:
             for one_album in self.albums:
-                res += "\n" + one_album.recursive_print(level-1, indentations+1)
+                res += "\n" + one_album.recursive_print(level - 1, indentations + 1)
         return res
 
     # Implement expected methods
     def __iter__(self):
         return iter(self.albums)
+
     def __len__(self):
         return len(self.albums)
+
     def __str__(self):
         return self.recursive_print(0)
 
@@ -1204,9 +1241,9 @@ class Library(object):
         self.update_ids()
         new_albums = self.server.sub_request(page="getAlbumList2",
                                              list_type='album',
-                                             extras={'type':'newest',
-                                                     'size':50
-                                                    })
+                                             extras={'type': 'newest',
+                                                     'size': 50
+                                                     })
 
         for one_album in new_albums:
             if one_album.attrib['artistId'] not in self.artist_ids:
@@ -1244,19 +1281,19 @@ class Library(object):
             for item in mylist:
                 res_string += item.play_string()
                 num_ret += 1
-            return (res_string, num_ret)
+            return res_string, num_ret
         else:
             for item in self.prev_res:
                 res_string += item.play_string()
                 num_ret += 1
-            return (res_string, num_ret)
+            return res_string, num_ret
 
         if jukebox:
             playlist = ""
             for one_artist in self.artists:
                 playlist += one_artist.play_string()
                 num_ret += 1
-            return (playlist, num_ret)
+            return playlist, num_ret
         else:
             for one_artist in self.artists:
                 one_artist.play_string()
@@ -1266,7 +1303,7 @@ class Library(object):
 
         res = ""
         if indentations > 0:
-            res = "   "*indentations
+            res = "   " * indentations
         if level > 0:
             for one_artist in self.artists:
                 res += "\n" + one_artist.recursive_print(level - 1,
@@ -1285,7 +1322,7 @@ class Library(object):
 
         similar = self.server.sub_request(page="getSimilarSongs",
                                           list_type="song",
-                                          extras={'id':song_id, 'count':count})
+                                          extras={'id': song_id, 'count': count})
         similar = [Song(x.attrib, self.server) for x in similar]
         self.prev_res = similar
         print_song_list(similar)
@@ -1322,7 +1359,7 @@ class Library(object):
 
         # Add request specific parameters to our hash
         params = server.default_params.copy()
-        params.update({'id':song_id})
+        params.update({'id': song_id})
 
         # Encode our parameters and send the request
         params = urlencode(params)
@@ -1517,8 +1554,10 @@ class Library(object):
     # Implement expected methods
     def __iter__(self):
         return iter(self.artists)
+
     def __len__(self):
         return len(self.artists)
+
     def __str__(self):
         return self.recursive_print(1, -1)
 
@@ -1608,7 +1647,7 @@ class SubServer(object):
         print_bitrate = str(self.bitrate)
         if self.bitrate is None:
             print_bitrate = ""
-        conf = "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nBitrate: %s\n"\
+        conf = "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nBitrate: %s\n" \
                "Jukebox: %s\nEnabled: %s\nScrobble: %s\n\n" % (
                    self.server_name, self.server_url, self.default_params['u'],
                    password, print_bitrate, str(self.jukebox),
@@ -1680,7 +1719,7 @@ class SubServer(object):
 
         # Return a list of the elements with the specified type
         return list(root.getiterator(tag='{http://subsonic.org/restapi}' +
-                                     list_type))
+                                         list_type))
 
     def go_online(self):
         """Ping the server to ensure it is online, if it is load the
@@ -1732,6 +1771,7 @@ class SubServer(object):
             if self.library.update_library() > 0:
                 print("Saving new library.")
                 pickle_library(self)
+
 
 ########################################################################
 #              Methods and classes above, code below                   #
@@ -1863,11 +1903,9 @@ while True:
         # Accept the input, quit on an EOF
         try:
             cmd = input(":")
+            parse_input(cmd)
         except EOFError:
             graceful_exit()
 
-        parse_input(cmd)
-
     except KeyboardInterrupt:
         graceful_exit()
-
