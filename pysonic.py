@@ -47,6 +47,7 @@ if PY3:
     from urllib.parse import urlencode
     from urllib.request import urlopen
     from urllib.error import HTTPError, URLError
+    from binascii import hexlify
 else:
     from urllib import urlencode
     from urllib2 import urlopen, HTTPError, URLError
@@ -1551,7 +1552,10 @@ class SubServer(object):
 
             # Store the password hex encoded on disk
             if password[0:4] != "enc:":
-                self.password = "enc:" + password.encode("hex")
+                if PY3:
+                    self.password = (b"enc:" + hexlify(bytes(password, encoding="utf8"))).decode('utf-8')
+                else:
+                    self.password = "enc:" + password.encode("hex")
             else:
                 self.password = password
 
@@ -1683,7 +1687,10 @@ class SubServer(object):
         pickle or generate the local cache if necessary. """
 
         if self.password == "":
-            self.password = "enc:" + getpass.getpass().encode("hex")
+            if PY3:
+                self.password = (b"enc:" + hexlify(bytes(getpass.getpass(), encoding="utf8"))).decode('utf-8')
+            else:
+                self.password = "enc:" + getpass.getpass().encode("hex")
 
         sys.stdout.write("Checking if server " + self.server_name +
                          " is online: ")
