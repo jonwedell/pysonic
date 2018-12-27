@@ -1563,7 +1563,7 @@ class SubServer(object):
         if server_url.count(".") == 0:
             server_url += ".subsonic.org"
         if server_url[0:7] != "http://" and server_url[0:8] != "https://":
-            server_url = "http://" + server_url
+            server_url = "https://" + server_url
         if server_url[-6:] != "/rest/":
             server_url = server_url + "/rest/"
         self.server_id = server_id
