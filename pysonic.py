@@ -55,20 +55,14 @@ else:
 
 from lyrics import get_lyrics as genius_lyrics
 
-# Python version dependant redefines
-if not PY3:
-    input = raw_input
-
 
 # Module level functions
-
 def get_home(filename=None):
     """ Returns the .pysonic directory location (full path) and
     if filename is specified returns the .pysonic directory plus
     that filename. """
 
-    home_dir = os.path.abspath(os.path.join(os.path.expanduser("~"),
-                                            ".pysonic/"))
+    home_dir = os.path.abspath(os.path.join(os.path.expanduser("~"), ".pysonic/"))
 
     if filename:
         return os.path.join(home_dir, filename)
@@ -1285,7 +1279,7 @@ class Library(object):
 
         # Make sure they have something to play
         if not hasattr(self, 'prev_res') or not self.prev_res:
-            return ("", 0)
+            return "", 0
 
         res_string = ""
         num_ret = 0
@@ -1572,8 +1566,7 @@ class Library(object):
                 number = len(albums)
             res = random.sample(albums, number)
         elif albtype == 'newest':
-            key = lambda k: k.data_dict.get('created', '?')
-            res = sorted(self.get_albums(), reverse=True, key=key)[:number]
+            res = sorted(self.get_albums(), reverse=True, key=lambda k: k.data_dict.get('created', '?'))[:number]
         else:
             raise ValueError("Invalid type to search for.")
 
