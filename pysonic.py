@@ -236,7 +236,6 @@ def get_now_playing():
         key, value = item.split("=")
         stream_dict[key] = value.strip()
 
-    print(stream_dict)
     stream_id = int(stream_dict['sid'])
     song_id = int(stream_dict['id'])
 
