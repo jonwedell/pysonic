@@ -15,43 +15,29 @@ Jon Wedell
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from __future__ import print_function
-
-import os
-import sys
-import time
-import stat
-import string
+import configparser
+import getpass
 import hashlib
+import os
+import pickle
+import platform
 import random
+import readline
 import signal
 import socket
-import getpass
-import readline
-import tempfile
-import platform
-import telnetlib
+import stat
+import string
 import subprocess
+import sys
+import telnetlib
+import tempfile
+import time
 import xml.etree.ElementTree as ETree
+from binascii import hexlify
 from optparse import OptionParser
-
-# Determine if we are running in python3
-PY3 = (sys.version_info[0] == 3)
-
-# Python version dependent loads
-# pylint: disable=wrong-import-order, ungrouped-imports
-if PY3:
-    import pickle
-    import configparser
-    from urllib.parse import urlencode
-    from urllib.request import urlopen
-    from urllib.error import HTTPError, URLError
-    from binascii import hexlify
-else:
-    from urllib import urlencode
-    from urllib2 import urlopen, HTTPError, URLError
-    import cPickle as pickle
-    import ConfigParser as configparser
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 from lyrics import get_lyrics as genius_lyrics
 
@@ -82,10 +68,7 @@ def clean_get(obj, key):
     changes made to properly display missing values and non-utf8
     results. """
 
-    if PY3:
-        return obj.data_dict.get(key, '?')
-    else:
-        return obj.data_dict.get(key, '?').encode('utf-8')
+    return obj.data_dict.get(key, '?')
 
 
 def get_lock(lockfile=None, killsignal=0):
@@ -1614,10 +1597,7 @@ class SubServer(object):
 
             # Store the password hex encoded on disk
             if password[0:4] != "enc:":
-                if PY3:
-                    self.password = (b"enc:" + hexlify(bytes(password, encoding="utf8"))).decode('utf-8')
-                else:
-                    self.password = "enc:" + password.encode("hex")
+                self.password = (b"enc:" + hexlify(bytes(password, encoding="utf8"))).decode('utf-8')
             else:
                 self.password = password
 
@@ -1650,14 +1630,9 @@ class SubServer(object):
         salt = salt_generator()
         self.default_params['s'] = salt
 
-        if not PY3:
-            to_hash = self.password[4:].decode("hex") + salt
-            self.default_params['t'] = hashlib.md5(to_hash).hexdigest()
-        else:
-            pwd = bytes.fromhex(self.password[4:]).decode('utf-8')
-            to_hash = "%s%s" % (pwd, salt)
-            to_hash = to_hash.encode("ascii")
-            self.default_params['t'] = hashlib.md5(to_hash).hexdigest()
+        pwd = bytes.fromhex(self.password[4:]).decode('utf-8')
+        to_hash = f"{pwd}{salt}".encode("ascii")
+        self.default_params['t'] = hashlib.md5(to_hash).hexdigest()
 
     def print_config(self):
         """Return a string corresponding the the config file format
@@ -1715,22 +1690,21 @@ Scrobble: {str(self.scrobble)}
             print(tmp)
 
         # Get the server response
+        string_result: str = ''
         try:
-            stringres = urlopen(tmp, timeout=timeout).read()
+            string_result = urlopen(tmp, timeout=timeout).read().decode("utf-8")
         except (socket.timeout, URLError):
             try:
-                stringres = urlopen(tmp, timeout=timeout).read()
+                string_result = urlopen(tmp, timeout=timeout).read().decode("utf-8")
             except (socket.timeout, URLError):
                 print("Request to subsonic server timed out twice.")
                 graceful_exit()
-        if PY3:
-            stringres = stringres.decode("utf-8")
 
         # Parse the XML
-        root = ETree.fromstring(stringres)
+        root = ETree.fromstring(string_result)
 
         if options.verbose:
-            print(stringres)
+            print(string_result)
             print(root)
 
         # Make sure the result is valid
@@ -1751,10 +1725,7 @@ Scrobble: {str(self.scrobble)}
         pickle or generate the local cache if necessary. """
 
         if self.password == "":
-            if PY3:
-                self.password = (b"enc:" + hexlify(bytes(getpass.getpass(), encoding="utf8"))).decode('utf-8')
-            else:
-                self.password = "enc:" + getpass.getpass().encode("hex")
+            self.password = (b"enc:" + hexlify(bytes(getpass.getpass(), encoding="utf8"))).decode('utf-8')
 
         sys.stdout.write("Checking if server " + self.server_name +
                          " is online: ")
