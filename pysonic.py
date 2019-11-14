@@ -490,13 +490,10 @@ def add_server():
     bitrate = input("Max bitrate (enter 0 to stream raw or press enter to "
                     "use default value): ")
     enabled = user_input_maps.get(input("Enabled (y/n): ").lower(), True)
-    jukebox = user_input_maps.get(input("Jukebox mode (y/n): ").lower(),
-                                  False)
     scrobble = user_input_maps.get(input("Scrobble (y/n): ").lower(), False)
 
     curserver = SubServer(len(state['all_servers']), server_name, user_name,
-                          password, server_url, enabled, bitrate, jukebox,
-                          scrobble)
+                          password, server_url, enabled, bitrate, scrobble)
     state['all_servers'].append(curserver)
     if enabled:
         sys.stdout.write("Initializing server " + curserver.server_name + ": ")
@@ -847,21 +844,14 @@ class Folder(object):
                                             data_dict=one_folder.attrib))
 
     def play_string(self):
-        """Either return the needed playlist data, or run the command
-        to add the song to the jukebox. """
+        """Return the needed playlist data. """
 
-        if self.server.jukebox:
-            for child in self.children:
-                child.play_string()
-            for one_song in self.songs:
-                one_song.play_string()
-        else:
-            playlist = ""
-            for child in self.children:
-                playlist += child.play_string()
-            for one_song in self.songs:
-                playlist += one_song.play_string()
-            return playlist
+        playlist = ""
+        for child in self.children:
+            playlist += child.play_string()
+        for one_song in self.songs:
+            playlist += one_song.play_string()
+        return playlist
 
     def update_server(self, server):
         """Update the server this folder is linked to. """
@@ -957,7 +947,7 @@ class Playlist(object):
     def __str__(self):
         return "%-1s: %s" % (self.id, self.name)
 
-    def recursive_print(self, level=0, indentations="ignored"):
+    def recursive_print(self, level=0):
         if level == 0:
             return "%-1s: %s" % (self.id, self.name)
         else:
@@ -988,36 +978,28 @@ class Song(object):
         self.server = server
 
     def play_string(self):
-        """If in jukebox mode, have subsonic add the song to the jukebox
-        playlist. Otherwise return the playlist string. """
+        """Return the playlist string. """
 
-        if self.server.jukebox:
-            self.server.sub_request(page="jukeboxControl",
-                                    list_type='jukeboxStatus',
-                                    extras={'action': 'add',
-                                            'id': self.data_dict['id']
-                                            })
-        else:
-            extras_dict = {'id': self.data_dict['id']}
-            if self.server.bitrate == 0:
-                extras_dict['format'] = "raw"
-            elif self.server.bitrate is not None:
-                extras_dict['maxBitRate'] = self.server.bitrate
+        extras_dict = {'id': self.data_dict['id']}
+        if self.server.bitrate == 0:
+            extras_dict['format'] = "raw"
+        elif self.server.bitrate is not None:
+            extras_dict['maxBitRate'] = self.server.bitrate
 
-            if self.server.scrobble:
-                library = self.server.library
-                scrobble_str = "#EXTINF:0,LastFM - This scrobbles %s\n%s" % (
-                    clean_get(self, 'title'),
-                    library.get_scrobble_url(clean_get(self, 'id')))
-            else:
-                scrobble_str = ""
-
-            return "#EXTINF:%s,%s - %s\n%s\n%s\n" % (
-                clean_get(self, 'duration'),
-                clean_get(self, 'artist'),
+        if self.server.scrobble:
+            library = self.server.library
+            scrobble_str = "#EXTINF:0,LastFM - This scrobbles %s\n%s" % (
                 clean_get(self, 'title'),
-                self.server.sub_request(page="stream", extras=extras_dict),
-                scrobble_str)
+                library.get_scrobble_url(clean_get(self, 'id')))
+        else:
+            scrobble_str = ""
+
+        return "#EXTINF:%s,%s - %s\n%s\n%s\n" % (
+            clean_get(self, 'duration'),
+            clean_get(self, 'artist'),
+            clean_get(self, 'title'),
+            self.server.sub_request(page="stream", extras=extras_dict),
+            scrobble_str)
 
     def __str__(self):
         return "%-3s: %s\n   %-4s: %s\n      %-5s: %s" % \
@@ -1100,17 +1082,12 @@ class Album(object):
             one_song.update_server(server)
 
     def play_string(self):
-        """Either return the needed playlist data, or run the command to
-        add the song to the jukebox. """
+        """Return the needed playlist data. """
 
-        if self.server.jukebox:
-            for one_song in self.songs:
-                one_song.play_string()
-        else:
-            playlist = ""
-            for one_song in self.songs:
-                playlist += one_song.play_string()
-            return playlist
+        playlist = ""
+        for one_song in self.songs:
+            playlist += one_song.play_string()
+        return playlist
 
     def recursive_print(self, level=5, indentations=0):
         """Prints children up to level n. """
@@ -1196,17 +1173,12 @@ class Artist(object):
                              ' artist.')
 
     def play_string(self):
-        """Either return the needed playlist data, or run the command to
-        add the song to the jukebox. """
+        """Return the needed playlist data. """
 
-        if self.server.jukebox:
-            for one_album in self.albums:
-                one_album.play_string()
-        else:
-            playlist = ""
-            for one_album in self.albums:
-                playlist += one_album.play_string()
-            return playlist
+        playlist = ""
+        for one_album in self.albums:
+            playlist += one_album.play_string()
+        return playlist
 
     def recursive_print(self, level=3, indentations=0):
         """Prints children up to level n. """
@@ -1308,9 +1280,8 @@ class Library(object):
             self.add_artist(one_artist.attrib['id'])
         self.initialized = True
 
-    def play_string(self, mylist=None, jukebox=False):
-        """Either return the needed playlist data, or run the command
-        to add the song to the jukebox. """
+    def play_string(self, mylist=None):
+        """Return the needed playlist data. """
 
         # Make sure they have something to play
         if not hasattr(self, 'prev_res') or not self.prev_res:
@@ -1329,16 +1300,6 @@ class Library(object):
                 res_string += item.play_string()
                 num_ret += 1
             return res_string, num_ret
-
-        if jukebox:
-            playlist = ""
-            for one_artist in self.artists:
-                playlist += one_artist.play_string()
-                num_ret += 1
-            return playlist, num_ret
-        else:
-            for one_artist in self.artists:
-                one_artist.play_string()
 
     def recursive_print(self, level=5, indentations=0):
         """Prints children up to level n. """
@@ -1636,7 +1597,7 @@ class SubServer(object):
     queries. """
 
     def __init__(self, server_id, server_name, user_name, password, server_url,
-                 enabled=True, bitrate=None, jukebox=False, scrobble=False):
+                 enabled=True, bitrate=None, scrobble=False):
         """A server object. """
 
         # Build the default parameters into a reusable hash
@@ -1677,7 +1638,6 @@ class SubServer(object):
         self.server_id = server_id
         self.server_url = server_url
         self.scrobble = scrobble
-        self.jukebox = jukebox
         self.server_name = server_name
         self.enabled = enabled
 
@@ -1716,12 +1676,15 @@ class SubServer(object):
         print_bitrate = str(self.bitrate)
         if self.bitrate is None:
             print_bitrate = ""
-        conf = "[%s]\nHost: %s\nUsername: %s\nPassword: %s\nBitrate: %s\n" \
-               "Jukebox: %s\nEnabled: %s\nScrobble: %s\n\n" % (
-                   self.server_name, self.server_url, self.default_params['u'],
-                   password, print_bitrate, str(self.jukebox),
-                   str(self.enabled), str(self.scrobble))
+        conf = f"""[{self.server_name}]
+Host: {self.server_url}
+Username: {self.default_params['u']}
+Password: {password}
+Bitrate: {print_bitrate}
+Enabled: {str(self.enabled)}
+Scrobble: {str(self.scrobble)}
 
+"""
         return conf
 
     def __str__(self):
@@ -1913,7 +1876,6 @@ for each_server in config.sections():
                            config.get(each_server, 'host'),
                            enabled=config.getboolean(each_server, 'enabled'),
                            bitrate=config.get(each_server, 'bitrate'),
-                           jukebox=config.getboolean(each_server, 'jukebox'),
                            scrobble=scrobble_plays)
     state['all_servers'].append(new_server)
 
