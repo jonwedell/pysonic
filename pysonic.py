@@ -141,7 +141,7 @@ def clear_lock():
     return True
 
 
-def update_width():
+def update_width(signal_number=None, frame=None):
     """ The terminal has resized, so figure out the new size."""
 
     # Check if we are outputting to a terminal style device
