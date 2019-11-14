@@ -141,8 +141,7 @@ def print_messages():
 
     for one_server in state['server']:
         print("On server: " + one_server.server_name)
-        messages = one_server.sub_request(page="getChatMessages",
-                                          list_type='chatMessage')
+        messages = one_server.sub_request(page="getChatMessages", list_type='chatMessage')
         # Convert time from unix time to readable time
         for message in messages:
             mtime = time.ctime(float(message.attrib['time']) / 1000).rstrip()
@@ -224,15 +223,11 @@ def now_playing():
 
     for one_server in state['server']:
         print("On server: " + one_server.server_name)
-        playing = one_server.sub_request(page="getNowPlaying",
-                                         list_type='entry')
+        playing = one_server.sub_request(page="getNowPlaying", list_type='entry')
         for one_person in playing:
-            print("   %s minutes ago %s played %s by %s (ID:%s)" % (
-                one_person.attrib.get('minutesAgo', '?'),
-                one_person.attrib.get('username', '?'),
-                one_person.attrib.get('title', '?'),
-                one_person.attrib.get('artist', '?'),
-                one_person.attrib.get('id', '?')))
+            ag = one_person.attrib.get
+            print(f"   {ag('minutesAgo', '?')} minutes ago {ag('username', '?')} played {ag('title', '?')} by "
+                  f"{ag('artist', '?')} (ID:{ag('id', '?')})")
             one_server.library.get_song_by_id(one_person.attrib['id'])
 
 
@@ -248,34 +243,31 @@ def choose_server(query=None):
                 one_server.go_online()
             if one_server.online:
                 state['server'].append(one_server)
-        print("Using server(s): %s" %
-              ",".join([x.server_name for x in state['server']]))
+        print("Using server(s): %s" % ",".join([x.server_name for x in state['server']]))
     elif query:
         queries = set(query.replace(",", " ").split())
-        myres = []
-        serv_hash = {}
+        my_result = []
+        server_hash = {}
         for one_server in state['all_servers']:
-            serv_hash[one_server.server_name] = one_server
+            server_hash[one_server.server_name] = one_server
         for query in queries:
-            if query in serv_hash:
-                one_server = serv_hash[query]
+            if query in server_hash:
+                one_server = server_hash[query]
                 if not one_server.enabled:
                     one_server.enabled = True
                 if not one_server.online:
                     one_server.go_online()
                 if one_server.online:
-                    myres.append(one_server)
+                    my_result.append(one_server)
                     print("Selected server " + query + ".")
             else:
-                print("No matching server (" + query +
-                      ")! Choose from: " +
+                print(f"No matching server ({query})! Choose from: " +
                       ",".join([x.server_name for x in state['all_servers']]))
-        if len(myres) > 0:
-            state['server'] = myres
+        if len(my_result) > 0:
+            state['server'] = my_result
         else:
             print("No servers matched your results.")
-        print("Using server(s): %s" %
-              ",".join([x.server_name for x in state['server']]))
+        print("Using server(s): %s" % ",".join([x.server_name for x in state['server']]))
         # Make sure that only enabled servers are enabled
         for one_server in state['all_servers']:
             one_server.enabled = False
@@ -283,17 +275,12 @@ def choose_server(query=None):
             one_server.enabled = True
     else:
         if len(state['server']) == len(state['all_servers']):
-            print("All servers enabled. Enter a server name to choose that "
-                  "server.")
-            print("Choose from: %s" %
-                  ",".join([x.server_name for x in state['all_servers']]))
+            print("All servers enabled. Enter a server name to choose that server.")
+            print("Choose from: %s" % ",".join([x.server_name for x in state['all_servers']]))
         else:
-            print("Currently active servers: %s" %
-                  ",".join([x.server_name for x in state['server']]))
-            print("All known servers: %s" %
-                  ",".join([x.server_name for x in state['all_servers']]))
-            print("Type 'server all' to restore all servers, or enter server"
-                  " names to select.")
+            print("Currently active servers: %s" % ",".join([x.server_name for x in state['server']]))
+            print("All known servers: %s" % ",".join([x.server_name for x in state['all_servers']]))
+            print("Type 'server all' to restore all servers, or enter server names to select.")
 
 
 def print_previous():
@@ -348,8 +335,7 @@ def print_lyrics(arg):
                 else:
                     print("No results.")
         else:
-            print("Lyrics search only supported for currently playing song or"
-                  " by specifying song ID.")
+            print("Lyrics search only supported for currently playing song or by specifying song ID.")
 
     # Get the lyrics of the currently playing song
     else:
@@ -380,17 +366,17 @@ def play_previous(play=False):
 
     # Create the m3u file
     rel_time = str(time.time())[-10:-3]
-    playlist_file = os.path.join(tempfile.gettempdir(), rel_time + ".m3u")
-    playlistf = open(playlist_file, "w")
-    playlistf.write("#EXTM3U\n")
-    playlistf.write(playlist)
-    playlistf.close()
+    playlist_path = os.path.join(tempfile.gettempdir(), rel_time + ".m3u")
+    playlist_file = open(playlist_path, "w")
+    playlist_file.write("#EXTM3U\n")
+    playlist_file.write(playlist)
+    playlist_file.close()
 
     if play:
         state['vlc'].write("clear")
-        state['vlc'].write("enqueue " + playlist_file)
+        state['vlc'].write("enqueue " + playlist_path)
     else:
-        state['vlc'].write("enqueue " + playlist_file)
+        state['vlc'].write("enqueue " + playlist_path)
     time.sleep(.1)
     state['vlc'].write("play")
 
@@ -399,9 +385,9 @@ def live():
     """Enter interactive python terminal. """
 
     import code
-    vars = globals()
-    vars.update(locals())
-    shell = code.InteractiveConsole(vars)
+    debug_vars = globals()
+    debug_vars.update(locals())
+    shell = code.InteractiveConsole(debug_vars)
     shell.interact()
 
 
@@ -457,27 +443,24 @@ def add_server():
                        'f': False,
                        'false': False}
 
-    server_name = ''.join(input("Informal name (one word is best):"
-                                " ").split())
+    server_name = ''.join(input("Informal name (one word is best): ").split())
     server_url = input("URL or subsonic username: ")
     user_name = input("Username: ")
-    print("Press enter to use secure password mode. (Prompt for password "
-          "each start.)")
+    print("Press enter to use secure password mode. (Prompt for password each start.)")
     password = getpass.getpass()
-    bitrate = input("Max bitrate (enter 0 to stream raw or press enter to "
-                    "use default value): ")
+    bitrate = input("Max bitrate (enter 0 to stream raw or press enter to use default value): ")
     enabled = user_input_maps.get(input("Enabled (y/n): ").lower(), True)
     scrobble = user_input_maps.get(input("Scrobble (y/n): ").lower(), False)
 
-    curserver = SubServer(len(state['all_servers']), server_name, user_name,
-                          password, server_url, enabled, bitrate, scrobble)
-    state['all_servers'].append(curserver)
+    cur_server = SubServer(len(state['all_servers']), server_name, user_name,
+                           password, server_url, enabled, bitrate, scrobble)
+    state['all_servers'].append(cur_server)
     if enabled:
-        sys.stdout.write("Initializing server " + curserver.server_name + ": ")
+        sys.stdout.write("Initializing server " + cur_server.server_name + ": ")
         sys.stdout.flush()
-        curserver.go_online()
-        if curserver.online:
-            state['server'].append(curserver)
+        cur_server.go_online()
+        if cur_server.online:
+            state['server'].append(cur_server)
 
 
 def iter_servers():
@@ -500,14 +483,12 @@ def print_song_list(song_list):
         print("No songs matched your query.")
         return
     if get_width() >= 80:
-        print("%-6s %-5s %-5s %-20s %-20s %-19s" % ("SongID", "AlbID",
-                                                    "ArtID", "Song",
-                                                    "Album", "Artist"))
+        print("%-6s %-5s %-5s %-20s %-20s %-19s" %
+              ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist"))
         for one_song in song_list:
             print(one_song.get_details())
     else:
-        print("For optimal song display, please resize terminal to be at"
-              " least 80 characters wide.")
+        print("For optimal song display, please resize terminal to be at least 80 characters wide.")
         for one_song in song_list:
             print(one_song)
 
@@ -559,7 +540,7 @@ def parse_input(command):
             one_server.library.get_special_albums(number=arg)
     elif command == "rand" or command == "random":
         for one_server in iter_servers():
-            one_server.library.get_special_albums(albtype='random', number=arg)
+            one_server.library.get_special_albums(album_type='random', number=arg)
     elif command == "similar":
         get_similar(arg)
     elif command == "server":
@@ -692,8 +673,7 @@ class VLCInterface(object):
 
             # Make sure we have a valid VLC location
             if not os.path.isfile(vlc_command[0]):
-                raise IOError("Did not find VLC binary at location: %s" %
-                              options.player)
+                raise IOError("Did not find VLC binary at location: %s" % options.player)
 
             # Figure out the interactive argument
             if platform.system() == "Linux":
@@ -702,11 +682,9 @@ class VLCInterface(object):
                 # Mac
                 vlc_command.append("--intf")
 
-            vlc_command.extend(["Telnet", "--telnet-password", "admin",
-                                "--no-loop", "--http-reconnect"])
+            vlc_command.extend(["Telnet", "--telnet-password", "admin", "--no-loop", "--http-reconnect"])
 
-            vlc_process = subprocess.Popen(vlc_command, stderr=null,
-                                           stdout=null)
+            vlc_process = subprocess.Popen(vlc_command, stderr=null, stdout=null)
 
             while vlc_process.poll() is None:
                 # Try opening the connection again
@@ -735,16 +713,16 @@ class VLCInterface(object):
             # Make sure if they send a message they wait a bit
             #  before receiving
             time.sleep(.1)
-            mesg = self.telnet_con.read_very_eager()
-            read = mesg
+            vlc_message = self.telnet_con.read_very_eager()
+            read = vlc_message
             while len(read) > 0:
                 read = self.telnet_con.read_very_eager()
-                mesg += read
-            if len(mesg) >= 3:
-                mesg = mesg[:-3]
-            elif len(mesg) == 1 and mesg == ":":
-                mesg = ""
-            return mesg.decode('utf-8')
+                vlc_message += read
+            if len(vlc_message) >= 3:
+                vlc_message = vlc_message[:-3]
+            elif len(vlc_message) == 1 and vlc_message == ":":
+                vlc_message = ""
+            return vlc_message.decode('utf-8')
         except (EOFError, socket.error):
             print("VLC socket died, please restart.")
             graceful_exit()
@@ -776,7 +754,7 @@ class Folder(object):
     songs = []
 
     def __init__(self, server=None, fold_id=None, data_dict=None):
-        """Create a folder heirarchy. Recursively calls itself with
+        """Create a folder hierarchy. Recursively calls itself with
         fold_id set to build the tree. """
 
         self.children = []
@@ -785,10 +763,8 @@ class Folder(object):
         self.server = server
 
         if fold_id:
-            childrens = self.server.sub_request(page="getMusicDirectory ",
-                                                list_type='child',
-                                                extras={'id': fold_id})
-            for child in childrens:
+            children = self.server.sub_request(page="getMusicDirectory ", list_type='child', extras={'id': fold_id})
+            for child in children:
                 if (child.attrib['isDir'] == "true" and
                         child.attrib['title'][-5:] != ".flac" and
                         child.attrib['title'][-4:] != ".mp3"):
@@ -799,8 +775,7 @@ class Folder(object):
                                                 data_dict=child.attrib))
 
                 elif child.attrib['isDir'] == "true":
-                    print("Skipping (subsonic bug): %s" %
-                          child.attrib['title'][0:get_width(25)])
+                    print("Skipping (subsonic bug): %s" % child.attrib['title'][0:get_width(25)])
                 else:
                     if child.attrib['id'] in self.server.library.song_ids:
                         song_id = child.attrib['id']
@@ -813,8 +788,7 @@ class Folder(object):
                                                server=self.server))
         else:
             server.library.update_ids()
-            folders = self.server.sub_request(page="getIndexes",
-                                              list_type='artist')
+            folders = self.server.sub_request(page="getIndexes", list_type='artist')
             for one_folder in folders:
                 self.children.append(Folder(server=self.server,
                                             fold_id=one_folder.attrib['id'],
@@ -910,8 +884,7 @@ class Playlist(object):
             self.songs = []
 
             self.songs = [self.server.library.get_song_by_id(x.attrib['id']) for x in
-                          self.server.sub_request(page="getPlaylist", list_type="entry",
-                                                  extras={'id': self.id})]
+                          self.server.sub_request(page="getPlaylist", list_type="entry", extras={'id': self.id})]
 
     def play_string(self):
         """ Create a play string for the playlist. """
@@ -946,8 +919,7 @@ class Song(object):
         if data_dict:
             self.data_dict = data_dict
         else:
-            raise ValueError('You must pass the song dictionary to create a '
-                             'song.')
+            raise ValueError('You must pass the song dictionary to create a song.')
 
     def update_server(self, server):
         """Update the server this song is linked to. """
@@ -1003,14 +975,12 @@ class Song(object):
         the subsonic server. """
 
         try:
-            artist, title, lyrics = genius_lyrics(clean_get(self, 'title'),
-                                                  clean_get(self, 'artist'))
+            artist, title, lyrics = genius_lyrics(clean_get(self, 'title'), clean_get(self, 'artist'))
         except Exception as e:
             return "Error when fetching lyrics: %s" % str(e)
 
         if lyrics:
-            return "%s | %s\n%s\n%s" % (artist, title, "-" * get_width(),
-                                        lyrics)
+            return "%s | %s\n%s\n%s" % (artist, title, "-" * get_width(), lyrics)
         else:
             return "No lyrics available."
 
@@ -1018,8 +988,7 @@ class Song(object):
         """Prints children up to level n. """
 
         max_len = get_width(7 + 3 * indentations)
-        res = "%-5s: %s" % (clean_get(self, 'id'),
-                            clean_get(self, 'title')[0:max_len])
+        res = "%-5s: %s" % (clean_get(self, 'id'), clean_get(self, 'title')[0:max_len])
         if indentations > 0:
             res = "   " * indentations + res
         return res
@@ -1049,8 +1018,7 @@ class Album(object):
             # Sort the songs by track number
             self.songs.sort(key=lambda k: int(k.data_dict.get('track', '0')))
         else:
-            raise ValueError('You must pass the album dictionary to create an'
-                             ' album.')
+            raise ValueError('You must pass the album dictionary to create an album.')
 
     def update_server(self, server):
         """Update the server this album is linked to. """
@@ -1096,9 +1064,8 @@ class Album(object):
         return len(self.songs)
 
     def __str__(self):
-        return "%-3s: %s\n%s" % (clean_get(self, 'artistId'),
-                                 clean_get(self, 'artist')[0:get_width(5)],
-                                 self.recursive_print(1, 1))
+        return "%-3s: %s\n%s" % \
+               (clean_get(self, 'artistId'), clean_get(self, 'artist')[0:get_width(5)], self.recursive_print(1, 1))
 
 
 class Artist(object):
@@ -1131,7 +1098,7 @@ class Artist(object):
             data_dict = self.server.sub_request(page="getArtist",
                                                 list_type='album',
                                                 extras={'id': artist_id},
-                                                retroot=True)
+                                                return_root=True)
 
             if data_dict == "err":
                 raise ValueError("Could not get artist data from server.")
@@ -1141,13 +1108,11 @@ class Artist(object):
                 self.add_albums(list(data_dict[0]))
             else:
                 print(data_dict)
-                raise ValueError('The root you passed includes more than one'
-                                 ' artist.')
+                raise ValueError('The root you passed includes more than one artist.')
             # Sort the albums by ID
             self.albums.sort(key=lambda k: int(k.data_dict.get('id', '0')))
         else:
-            raise ValueError('You must pass the artist dictionary to create an'
-                             ' artist.')
+            raise ValueError('You must pass the artist dictionary to create an artist.')
 
     def play_string(self):
         """Return the needed playlist data. """
@@ -1161,8 +1126,7 @@ class Artist(object):
         """Prints children up to level n. """
 
         max_len = get_width(5 + 3 * indentations)
-        res = "%-3s: %s" % (clean_get(self, 'id'),
-                            clean_get(self, 'name')[0:max_len])
+        res = "%-3s: %s" % (clean_get(self, 'id'), clean_get(self, 'name')[0:max_len])
         if indentations > 0:
             res = "   " * indentations + res
         if level > 0:
@@ -1189,8 +1153,7 @@ class Library(object):
 
     def __init__(self, server=None):
         if server is None:
-            raise ValueError("You must specify a corresponding server for this"
-                             " library.")
+            raise ValueError("You must specify a corresponding server for this library.")
         self.artists = []
         self.server = server
         self.folder = None
@@ -1232,9 +1195,7 @@ class Library(object):
         self.update_ids()
         new_albums = self.server.sub_request(page="getAlbumList2",
                                              list_type='album',
-                                             extras={'type': 'newest',
-                                                     'size': 50
-                                                     })
+                                             extras={'type': 'newest', 'size': 50})
 
         for one_album in new_albums:
             if one_album.attrib['artistId'] not in self.artist_ids:
@@ -1252,8 +1213,7 @@ class Library(object):
     def fill_artists(self):
         """Query the server for all the artists and albums. """
 
-        for one_artist in self.server.sub_request(page="getArtists",
-                                                  list_type='artist'):
+        for one_artist in self.server.sub_request(page="getArtists", list_type='artist'):
             self.add_artist(one_artist.attrib['id'])
         self.initialized = True
 
@@ -1286,8 +1246,7 @@ class Library(object):
             res = "   " * indentations
         if level > 0:
             for one_artist in self.artists:
-                res += "\n" + one_artist.recursive_print(level - 1,
-                                                         indentations + 1)
+                res += "\n" + one_artist.recursive_print(level - 1, indentations + 1)
         return res
 
     def get_similar_songs(self, song_id, count=10):
@@ -1296,8 +1255,7 @@ class Library(object):
         try:
             song_id = int(song_id)
         except ValueError:
-            print("You must provide a song ID and not a song name for the "
-                  "similar query.")
+            print("You must provide a song ID and not a song name for the similar query.")
             return
 
         similar = self.server.sub_request(page="getSimilarSongs",
@@ -1534,7 +1492,7 @@ class Library(object):
             else:
                 print(one_folder.recursive_print(0))
 
-    def get_special_albums(self, albtype='newest', number=10):
+    def get_special_albums(self, album_type='newest', number=10):
         """Returns either new or random albums. """
 
         # Process the supplied number
@@ -1543,12 +1501,12 @@ class Library(object):
         else:
             number = int(number)
 
-        if albtype == 'random':
+        if album_type == 'random':
             albums = self.get_albums()
             if len(albums) < number:
                 number = len(albums)
             res = random.sample(albums, number)
-        elif albtype == 'newest':
+        elif album_type == 'newest':
             res = sorted(self.get_albums(), reverse=True, key=lambda k: k.data_dict.get('created', '?'))[:number]
         else:
             raise ValueError("Invalid type to search for.")
@@ -1590,10 +1548,10 @@ class SubServer(object):
         #      to properly implement get_now_playing()
 
         if password == "":
-            self.securepass = True
+            self.secure_password = True
             self.password = password
         else:
-            self.securepass = False
+            self.secure_password = False
 
             # Store the password hex encoded on disk
             if password[0:4] != "enc:":
@@ -1639,7 +1597,7 @@ class SubServer(object):
         for this server. """
 
         password = self.password
-        if self.securepass:
+        if self.secure_password:
             password = ""
         print_bitrate = str(self.bitrate)
         if self.bitrate is None:
@@ -1659,7 +1617,7 @@ Scrobble: {str(self.scrobble)}
         return self.print_config()
 
     def sub_request(self, page="ping", list_type='subsonic-response',
-                    extras=None, timeout=10, retroot=False):
+                    extras=None, timeout=10, return_root=False):
         """Query subsonic, parse resulting xml and return an ElementTree. """
 
         # Generate a unique salt for this request
@@ -1709,16 +1667,14 @@ Scrobble: {str(self.scrobble)}
 
         # Make sure the result is valid
         if root.attrib['status'] != 'ok':
-            raise ValueError("Server responded with error: %s" %
-                             root[0].attrib['message'])
+            raise ValueError(f"Server responded with error: {root[0].attrib['message']}")
 
         # Short circuit return the whole tree if requested
-        if retroot:
+        if return_root:
             return root
 
         # Return a list of the elements with the specified type
-        return list(root.getiterator(tag='{http://subsonic.org/restapi}' +
-                                         list_type))
+        return list(root.getiterator(tag='{http://subsonic.org/restapi}' + list_type))
 
     def go_online(self):
         """Ping the server to ensure it is online, if it is load the
@@ -1727,8 +1683,7 @@ Scrobble: {str(self.scrobble)}
         if self.password == "":
             self.password = (b"enc:" + hexlify(bytes(getpass.getpass(), encoding="utf8"))).decode('utf-8')
 
-        sys.stdout.write("Checking if server " + self.server_name +
-                         " is online: ")
+        sys.stdout.write(f"Checking if server {self.server_name} is online: ")
         sys.stdout.flush()
 
         # Don't add the server to our server list if it crashes out
@@ -1742,15 +1697,14 @@ Scrobble: {str(self.scrobble)}
         sys.stdout.write('Yes\n')
         sys.stdout.flush()
 
-        # Try to load the pickle, build the library if neccessary
+        # Try to load the pickle, build the library if necessary
         need_new_build = False
         try:
             self.library = pickle.load(open(self.pickle, "rb"))
         except IOError:
             need_new_build = True
         except (EOFError, TypeError, AttributeError, pickle.UnpicklingError):
-            print("Library archive corrupt or generated by old version of"
-                  " pysonic. Rebuilding library.")
+            print("Library archive corrupt or generated by old version of pysonic. Rebuilding library.")
             need_new_build = True
 
         if need_new_build:
@@ -1777,34 +1731,24 @@ Scrobble: {str(self.scrobble)}
 signal.signal(signal.SIGWINCH, update_width)
 
 # Specify some basic information about our command
-parser = OptionParser(usage="usage: %prog", version="%prog .9",
-                      description="Enqueue songs from subsonic.")
-
-parser.add_option("--verbose", action="store_true", dest="verbose",
-                  default=False, help="More than you'll ever want to know.")
-
-parser.add_option("--passthrough", action="store_true", dest="passthrough",
-                  default=False, help="Send commands directly to VLC without "
-                                      "loading anything.")
-
-parser.add_option("--vlc-location", action="store", dest="player",
-                  default=None, help="Location of VLC binary.")
+parser = OptionParser(usage="usage: %prog", version="%prog .9", description="Enqueue songs from subsonic.")
+parser.add_option("--verbose", action="store_true", dest="verbose", default=False,
+                  help="More than you'll ever want to know.")
+parser.add_option("--passthrough", action="store_true", dest="passthrough", default=False,
+                  help="Send commands directly to VLC without loading anything.")
+parser.add_option("--vlc-location", action="store", dest="player", default=None, help="Location of VLC binary.")
 
 # Options, parse 'em
 (options, cmd_input) = parser.parse_args()
 
 if stat.S_ISFIFO(os.fstat(0).st_mode) or stat.S_ISREG(os.fstat(0).st_mode):
     options.stdin = True
-    options.pingtime = False
+    options.ping_time = False
 else:
     options.stdin = False
 
 # Use a dictionary to hold the state
-state = {}
-state['vlc'] = None
-state['server'] = []
-state['all_servers'] = []
-state['cols'] = 80
+state = {'vlc': None, 'server': [], 'all_servers': [], 'cols': 80}
 
 # If they only want to send commands to VLC, go ahead
 if options.passthrough:
