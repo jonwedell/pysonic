@@ -20,104 +20,30 @@ import getpass
 import hashlib
 import os
 import pickle
-import platform
 import random
 import readline
 import signal
 import socket
 import stat
-import string
-import subprocess
 import sys
-import telnetlib
 import tempfile
 import time
-import xml.etree.ElementTree as ETree
 from binascii import hexlify
 from optparse import OptionParser
-from urllib.error import HTTPError, URLError
+from urllib.error import URLError, HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
+from xml.etree import ElementTree as ETree
 
-from lyrics import get_lyrics as genius_lyrics
+from filelock import Timeout, FileLock
 
-
-# Module level functions
-def get_home(filename=None):
-    """ Returns the .pysonic directory location (full path) and
-    if filename is specified returns the .pysonic directory plus
-    that filename. """
-
-    home_dir = os.path.abspath(os.path.join(os.path.expanduser("~"), ".pysonic/"))
-
-    if filename:
-        return os.path.join(home_dir, filename)
-    else:
-        return home_dir
+from pysonic.exceptions import PysonicException
+from pysonic.lyrics import get_lyrics as genius_lyrics
+from pysonic.utils import get_home, clean_get, salt_generator
+from pysonic.vlc import VLCInterface
 
 
-def salt_generator(size=10, chars=string.ascii_uppercase + string.digits):
-    """ Generates a random ASCII string (or string from whatever source
-    you provide in chars) of length size. """
-
-    return ''.join(random.SystemRandom().choice(chars) for _ in range(size))
-
-
-def clean_get(obj, key):
-    """ Returns a key with the song dictionary with the necessary
-    changes made to properly display missing values and non-utf8
-    results. """
-
-    return obj.data_dict.get(key, '?')
-
-
-def get_lock(lockfile=None, killsignal=0):
-    """ Opens a lock file to make sure that only one instance of
-    pysonic is running at a time. """
-
-    if lockfile is None:
-        lockfile = get_home("lock")
-    else:
-        lockfile = get_home(lockfile)
-
-    # If there is a lockfile, see if it is stale
-    if os.path.isfile(lockfile):
-        pid = open(lockfile, "r").read().strip()
-        if not pid.isdigit():
-            print("Corrupt PID in lock file (" + str(pid) + "). Clearing.")
-        else:
-            pid = int(pid)
-            try:
-                os.kill(pid, killsignal)
-            except OSError:
-                print("Looks like pysonic quit abnormally last run.")
-            else:
-                if killsignal == 0:
-                    print("It looks like pysonic is already running!")
-                    return False
-        os.unlink(lockfile)
-
-    # Write our PID to the lockfile
-    try:
-        open(lockfile, "w").write(str(os.getpid()))
-    except IOError:
-        print("Could not write lockfile!")
-        return False
-    return True
-
-
-def clear_lock():
-    """ Removes the pysonic lock file. """
-
-    lockfile = get_home("lock")
-    try:
-        os.unlink(lockfile)
-    except IOError:
-        print("Could not unlink the lock file!")
-        return False
-    return True
-
-
+# Update terminal size when window is resized
 def update_width(signal_number=None, frame=None):
     """ The terminal has resized, so figure out the new size."""
 
@@ -409,10 +335,10 @@ def pickle_library(cur_server):
     cur_server.library.update_server(cur_server)
 
 
-def graceful_exit(code=0):
+def graceful_exit(code=0, message="Shutting down..."):
     """Quit gracefully, saving state. """
 
-    print("\nShutting down...")
+    print(f"\n{message}")
 
     # Create the history file if it doesn't exist
     if not os.path.isfile(get_home("history")):
@@ -425,7 +351,7 @@ def graceful_exit(code=0):
         config_str += one_server.print_config()
     open(get_home("config"), 'w').write(config_str)
 
-    clear_lock()
+    lock.release()
 
     print("Goodbye!")
     sys.exit(code)
@@ -646,104 +572,6 @@ Playlist management:
             print(state['vlc'].read_write("%s %s" % (command, arg)))
         else:
             print(state['vlc'].read_write(command))
-
-
-class VLCInterface(object):
-    """Allows for interfacing (or creating and then interfacing)
-    with local VLC instance. """
-
-    def __init__(self):
-        try:
-            self.telnet_con = telnetlib.Telnet("localhost", 4212, 3)
-        except socket.error:
-            # Send all command output to dev/null
-            null = open("/dev/null", "w")
-
-            # Use the player they specify
-            if options.player:
-                vlc_command = [options.player]
-
-            # Try to figure out where the player is
-            else:
-                vlc_command = ["/usr/bin/vlc"]
-
-                # If MacOS version exists
-                if os.path.isfile("/Applications/VLC.app/Contents/MacOS/VLC"):
-                    vlc_command = ["/Applications/VLC.app/Contents/MacOS/VLC"]
-
-            # Make sure we have a valid VLC location
-            if not os.path.isfile(vlc_command[0]):
-                raise IOError("Did not find VLC binary at location: %s" % options.player)
-
-            # Figure out the interactive argument
-            if platform.system() == "Linux":
-                vlc_command.append("-I")
-            else:
-                # Mac
-                vlc_command.append("--intf")
-
-            vlc_command.extend(["Telnet", "--telnet-password", "admin", "--no-loop", "--http-reconnect"])
-
-            vlc_process = subprocess.Popen(vlc_command, stderr=null, stdout=null)
-
-            while vlc_process.poll() is None:
-                # Try opening the connection again
-                try:
-                    self.telnet_con = telnetlib.Telnet("localhost", 4212)
-                    break
-                except socket.error:
-                    time.sleep(.01)
-
-            # The VLC process died or never opened
-            else:
-                print("Could not connect to launched VLC process.")
-                graceful_exit()
-
-        # Do the login dance
-        self.write("admin\n")
-        self.read()
-        # Make the VLC prompt match
-        self.write("set prompt :\n")
-        self.read()
-
-    def read(self):
-        """Read from the VLC socket. """
-
-        try:
-            # Make sure if they send a message they wait a bit
-            #  before receiving
-            time.sleep(.1)
-            vlc_message = self.telnet_con.read_very_eager()
-            read = vlc_message
-            while len(read) > 0:
-                read = self.telnet_con.read_very_eager()
-                vlc_message += read
-            if len(vlc_message) >= 3:
-                vlc_message = vlc_message[:-3]
-            elif len(vlc_message) == 1 and vlc_message == ":":
-                vlc_message = ""
-            return vlc_message.decode('utf-8')
-        except (EOFError, socket.error):
-            print("VLC socket died, please restart.")
-            graceful_exit()
-
-    def write(self, message):
-        """Write a command to the VLC socket. """
-
-        try:
-            if message[-1:] != "\n":
-                message += "\n"
-            self.telnet_con.write(message.encode('ascii'))
-        except (EOFError, socket.error):
-            print("VLC socket died, please restart.")
-            graceful_exit()
-
-    def read_write(self, message):
-        """Write a command and send back the response. """
-
-        self.read()
-        self.write(str(message))
-        return self.read()
 
 
 class Folder(object):
@@ -1373,6 +1201,7 @@ class Library(object):
 
         def id_sort(playlist):
             return playlist.attrib['id']
+
         res = sorted(self.server.sub_request(page="getPlaylists", list_type="playlist"), key=id_sort)
 
         # ID search
@@ -1655,8 +1484,7 @@ Scrobble: {str(self.scrobble)}
             try:
                 string_result = urlopen(tmp, timeout=timeout).read().decode("utf-8")
             except (socket.timeout, URLError):
-                print("Request to subsonic server timed out twice.")
-                graceful_exit()
+                raise PysonicException("Request to subsonic server timed out twice.")
 
         # Parse the XML
         root = ETree.fromstring(string_result)
@@ -1727,7 +1555,6 @@ Scrobble: {str(self.scrobble)}
 #              Methods and classes above, code below                   #
 ########################################################################
 
-# Update terminal size when window is resized
 signal.signal(signal.SIGWINCH, update_width)
 
 # Specify some basic information about our command
@@ -1752,7 +1579,7 @@ state = {'vlc': None, 'server': [], 'all_servers': [], 'cols': 80}
 
 # If they only want to send commands to VLC, go ahead
 if options.passthrough:
-    state['vlc'] = VLCInterface()
+    state['vlc'] = VLCInterface(player=options.player)
     if options.stdin:
         for line in sys.stdin.readlines():
             print(state['vlc'].read_write(line.rstrip()))
@@ -1764,9 +1591,11 @@ if options.passthrough:
 if not os.path.isdir(get_home()):
     os.makedirs(get_home())
 
-# Get a lock (make sure we don't run twice at once)
-if not get_lock():
-    sys.exit(1)
+lock = FileLock(get_home('lock'), timeout=10)
+try:
+    lock.acquire()
+except Timeout:
+    graceful_exit(message='It looks like pysonic is already running.')
 
 # Parse the config file, load (or query) the server data
 config = configparser.ConfigParser()
@@ -1805,7 +1634,7 @@ if len(state['server']) < 1:
         print("No connections established. Do you have at least one server "
               "specified in ~/.pysonic/config and are your username, server "
               "URL, and password correct?")
-        clear_lock()
+        lock.release()
         sys.exit(10)
     else:
         print("No configuration file found. Configure a server now.")
@@ -1827,7 +1656,7 @@ except IOError:
 if options.stdin:
     for line in sys.stdin.readlines():
         parse_input(line.rstrip())
-    clear_lock()
+    lock.release()
     sys.exit(0)
 
 # First run any command line commands
@@ -1847,4 +1676,6 @@ while True:
             graceful_exit()
 
     except KeyboardInterrupt:
-        graceful_exit()
+        graceful_exit(message="Killed... Cleaning up and shutting down.")
+    except PysonicException as error:
+        graceful_exit(message=str(error), code=1)
