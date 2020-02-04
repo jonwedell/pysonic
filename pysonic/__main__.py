@@ -1592,7 +1592,7 @@ if options.passthrough:
 if not os.path.isdir(get_home()):
     os.makedirs(get_home())
 
-lock = FileLock(get_home('lock'), timeout=10)
+lock = FileLock(get_home('lock'), timeout=1)
 try:
     lock.acquire()
 except Timeout:
