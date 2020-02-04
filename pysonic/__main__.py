@@ -838,13 +838,14 @@ class Album(object):
             songs = self.server.sub_request(page="getAlbum",
                                             list_type='song',
                                             extras={'id': self.data_dict['id']})
+            # Sort the songs by track number and disk
+            songs.sort(key=lambda k: (int(k.attrib.get('discNumber', 1)),
+                                      k.attrib.get('track', k.attrib.get('title', k.attrib.get('id')))))
             if not server.library.initialized:
                 sys.stdout.write('.')
                 sys.stdout.flush()
             for one_song in songs:
                 self.songs.append(Song(one_song.attrib, server=self.server))
-            # Sort the songs by track number
-            self.songs.sort(key=lambda k: int(k.data_dict.get('track', '0')))
         else:
             raise ValueError('You must pass the album dictionary to create an album.')
 
