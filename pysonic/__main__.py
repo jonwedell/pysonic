@@ -1503,7 +1503,7 @@ Scrobble: {str(self.scrobble)}
             return root
 
         # Return a list of the elements with the specified type
-        return list(root.getiterator(tag='{http://subsonic.org/restapi}' + list_type))
+        return list(root.iter(tag='{http://subsonic.org/restapi}' + list_type))
 
     def go_online(self):
         """Ping the server to ensure it is online, if it is load the
