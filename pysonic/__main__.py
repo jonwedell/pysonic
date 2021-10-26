@@ -39,7 +39,7 @@ from filelock import Timeout, FileLock
 
 from pysonic.exceptions import PysonicException
 from pysonic.lyrics import get_lyrics as genius_lyrics
-from pysonic.utils import get_home, clean_get, salt_generator
+from pysonic.utils import get_home, clean_get, salt_generator, natural_sort
 from pysonic.vlc import VLCInterface
 
 
@@ -838,9 +838,13 @@ class Album(object):
             songs = self.server.sub_request(page="getAlbum",
                                             list_type='song',
                                             extras={'id': self.data_dict['id']})
+
             # Sort the songs by track number and disk
-            songs.sort(key=lambda k: (int(k.attrib.get('discNumber', 1)),
-                                      k.attrib.get('track', k.attrib.get('title', k.attrib.get('id')))))
+            def sort_key(k):
+                return natural_sort(k.attrib.get('discNumber', '1') +
+                                    k.attrib.get('track', k.attrib.get('title', k.attrib.get('id'))))
+            songs.sort(key=sort_key)
+
             if not server.library.initialized:
                 sys.stdout.write('.')
                 sys.stdout.flush()
@@ -1478,7 +1482,6 @@ Scrobble: {str(self.scrobble)}
             print(tmp)
 
         # Get the server response
-        string_result: str = ''
         try:
             string_result = urlopen(tmp, timeout=timeout).read().decode("utf-8")
         except (socket.timeout, URLError):
