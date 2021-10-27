@@ -812,7 +812,8 @@ class Song(object):
         else:
             return "No lyrics available."
 
-    def recursive_print(self, indentations=0, dummy_level=0):
+    # Though the IDE will tell you level isn't used, it's lying. (Can be called from `result` command.)
+    def recursive_print(self, indentations=0, level=0):
         """Prints children up to level n. """
 
         max_len = get_width(7 + 3 * indentations)
