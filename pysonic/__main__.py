@@ -409,10 +409,10 @@ def print_song_list(song_list):
         print("No songs matched your query.")
         return
     if get_width() >= 80:
-        print("%-6s %-5s %-5s %-20s %-20s %-19s" %
-              ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist"))
+        show_header = True
         for one_song in song_list:
-            print(one_song.get_details())
+            print(one_song.get_details(show_header=show_header))
+            show_header = False
     else:
         print("For optimal song display, please resize terminal to be at least 80 characters wide.")
         for one_song in song_list:
@@ -787,16 +787,25 @@ class Song(object):
                 clean_get(self, 'id'),
                 clean_get(self, 'title')[0:get_width(13)])
 
-    def get_details(self):
+    def get_details(self, show_header=False):
         """Print in a columnar mode that works well with multiple songs. """
 
-        return "%-6s|%-5s|%-5s|%-20s|%-20s|%-19s" % (
+        total_space = get_width(21)
+        available_space = int(total_space/3)
+        remainder = total_space % 3
+
+        if show_header:
+            header_format = f"%-6s|%-5s|%-5s|%-{available_space}s|%-{available_space}s|%-{available_space + remainder}s"
+            print(header_format % ("SongID", "AlbID", "ArtID", "Song", "Album", "Artist"))
+
+        format_string = f"%-6s|%-5s|%-5s|%-{available_space}s|%-{available_space}s|%-{available_space + remainder}s"
+        return format_string % (
             clean_get(self, 'id'),
             clean_get(self, 'albumId'),
             clean_get(self, 'artistId'),
-            clean_get(self, 'title')[:20],
-            clean_get(self, 'album')[:20],
-            clean_get(self, 'artist')[:get_width(61)])
+            clean_get(self, 'title')[:available_space],
+            clean_get(self, 'album')[:available_space],
+            clean_get(self, 'artist')[:available_space+remainder])
 
     def get_lyrics(self):
         """ Returns the lyrics of the song as a string as provided by
