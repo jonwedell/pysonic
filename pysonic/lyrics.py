@@ -40,12 +40,15 @@ def _lyrics_from_song_api_path(song_api_path):
     [h.extract() for h in html('script')]
 
     divs = html.findAll("div")
+    lyrics = ''
     for div in divs:
         classes = div.get('class')
         if classes:
             for one_class in classes:
                 if one_class.startswith('Lyrics__Container'):
-                    return div.get_text(separator="\n")
+                    lyrics += div.get_text(separator="\n")
+    if lyrics:
+        return lyrics
 
     return 'Got a song response, but didn\'t find any lyircs.'
 
