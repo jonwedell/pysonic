@@ -6,11 +6,13 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
+import pysonic.utils as utils
+
 base_url = "https://api.genius.com"
 
 
 def get_token() -> Optional[str]:
-    user_home_path = os.path.abspath(os.path.join(os.path.expanduser("~"), ".pysonic/"))
+    user_home_path = utils.get_home()
 
     try:
         with open(os.path.join(user_home_path, "genius_api_key"), "r") as token_file:
