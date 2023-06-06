@@ -38,16 +38,6 @@ def clean_get(obj, key):
     return obj.data_dict.get(key, '?')
 
 
-def natural_sort(sort_list):
-    def convert(text):
-        return int(text) if text.isdigit() else text.lower()
-
-    def alphanum_key(key):
-        return [convert(c) for c in re.split('([0-9]+)', key)]
-
-    return sorted(sort_list, key=alphanum_key)
-
-
 def get_width(used=0):
     """Get the remaining width of the terminal. """
 
