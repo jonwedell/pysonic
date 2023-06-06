@@ -81,3 +81,7 @@ class Album(object):
                (utils.clean_get(self, 'artistId'),
                 utils.clean_get(self, 'artist')[0:utils.get_width(5)],
                 self.recursive_str(1, 1))
+
+    def __repr__(self) -> str:
+        return f"Album(title='{self.data_dict.get('name')}', id={self.data_dict.get('id')})"
+

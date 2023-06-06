@@ -50,6 +50,9 @@ class Artist(object):
         else:
             raise ValueError('You must pass the artist dictionary to create an artist.')
 
+    def __repr__(self) -> str:
+        return f"Artist(name='{self.data_dict.get('name')}', id={self.data_dict.get('id')})"
+
     def play_string(self) -> str:
         """Return the needed playlist data. """
 

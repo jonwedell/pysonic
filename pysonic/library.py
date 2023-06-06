@@ -1,5 +1,6 @@
 import random
 import time
+from datetime import datetime
 from functools import cached_property
 from typing import List, Optional, Iterable
 from urllib.parse import urlencode
@@ -388,3 +389,6 @@ class Library(object):
 
     def __str__(self) -> str:
         return self.recursive_str(1, -1)
+
+    def __repr__(self) -> str:
+        return f"Library(server={repr(self.server)}, last_update='{datetime.fromtimestamp(self.last_update).strftime('%Y-%m-%d %H:%M:%S')}')"

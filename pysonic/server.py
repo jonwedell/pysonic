@@ -236,3 +236,6 @@ Scrobble: {str(self.scrobble)}
         if self.library.update_library() > 0:
             print("Saving new library.")
             self.pickle()
+
+    def __repr__(self) -> str:
+        return f"Server(server_url='{self.server_url}')"

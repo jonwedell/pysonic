@@ -57,6 +57,9 @@ class Song(object):
                 utils.clean_get(self, 'id'),
                 utils.clean_get(self, 'title')[0:utils.get_width(13)])
 
+    def __repr__(self) -> str:
+        return f"Song(title='{self.data_dict.get('title')}', id={self.data_dict.get('id')})"
+
     def get_details(self, show_header: bool = False):
         """Print in a columnar mode that works well with multiple songs. """
 
