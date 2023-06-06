@@ -23,11 +23,7 @@ class Album(object):
                                             extras={'id': self.data_dict['id']})
 
             # Sort the songs by track number and disk
-            def sort_key(k):
-                return utils.natural_sort(k.attrib.get('discNumber', '1') +
-                                          k.attrib.get('track', k.attrib.get('title', k.attrib.get('id'))))
-
-            songs.sort(key=sort_key)
+            songs.sort(key=lambda k: (int(k.attrib.get('discNumber', sys.maxsize)), int(k.attrib.get('track', sys.maxsize))))
 
             if not server.library.initialized:
                 sys.stdout.write('.')
