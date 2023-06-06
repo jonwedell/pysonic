@@ -115,7 +115,7 @@ class Server(object):
         self.library.update_server(self)
 
     def print_config(self) -> str:
-        """Return a string corresponding the the config file format
+        """Return a string corresponding to the config file format
         for this server. """
 
         password = self.password
