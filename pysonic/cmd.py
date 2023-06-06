@@ -85,7 +85,22 @@ class PysonicShell(cmd.Cmd):
 
     def do_prev(self, _):
         """prev - return to the previous track"""
-        pysonic.state.vlc.write("prev")
+        # We have to check if the previous song(s) is a scrobble, and if so, go back further
+        playlist = [_[1:].strip() for _ in pysonic.state.vlc.read_write("playlist").splitlines()[2:-2]]
+        now_playing = None
+        for pos, line in enumerate(playlist):
+            if line.startswith("*"):
+                now_playing = pos
+        if not now_playing:
+            raise RuntimeError('No currently playing song detected.')
+        while now_playing > 0:
+            now_playing -= 1
+            item = playlist[now_playing]
+            if "This scrobbles" in item:
+                continue
+            pysonic.state.vlc.write(f"goto {item[:item.index(' ')]}")
+            break
+
         print(commands.get_now_playing())
 
     def do_list(self, _):
