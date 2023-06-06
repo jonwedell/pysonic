@@ -3,15 +3,15 @@ import hashlib
 import logging
 import os
 import pickle
-import socket
 import sys
 from binascii import hexlify
 from typing import List, Union
-from urllib.error import URLError, HTTPError
-from urllib.parse import urlencode
-from urllib.request import urlopen
 from xml.etree import ElementTree as ETree
 from xml.etree.ElementTree import Element
+
+import requests
+from requests import Request
+from requests.adapters import HTTPAdapter, Retry
 
 import pysonic
 import pysonic.utils as utils
@@ -21,6 +21,8 @@ from pysonic.exceptions import PysonicException
 class Server(object):
     """This class represents a server. It stores the password and makes
     queries. """
+
+    session: requests.Session = None
 
     def __init__(self, server_id,
                  server_name: str,
@@ -78,6 +80,11 @@ class Server(object):
         self.online = False
         self.pickle_file = utils.get_home(self.server_name + ".pickle")
         self.library = pysonic.Library(server=self)
+
+        self.session = requests.Session()
+        retries = Retry(total=3, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+        self.session.mount('http://', HTTPAdapter(max_retries=retries))
+        self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def generate_md5_password(self) -> None:
         """Creates a random salt and sets the md5(password+salt) and
@@ -145,41 +152,30 @@ Scrobble: {str(self.scrobble)}
         self.generate_md5_password()
 
         # Add request specific parameters to our hash
-        params = self.default_params.copy()
         if extras is None:
             extras = {}
-        params.update(extras)
 
-        # Encode our parameters and send the request
-        for key in list(params.keys()):
-            try:
-                params[key] = params[key].encode('utf-8')
-            except AttributeError:
-                pass
-        params = urlencode(params)
-
-        # Encode the URL
-        tmp = self.server_url.rstrip() + page.rstrip() + "?" + params
+        # Prepare the requests
+        request = Request('GET', self.server_url.rstrip() + page.rstrip(), params={**self.default_params, **extras})
+        prepped = self.session.prepare_request(request)
 
         # To stream we only want the URL returned, not the data
         if page == "stream":
-            return tmp
+            return prepped.url
 
-        logging.debug(f'Request URL calculated as: {tmp}')
+        logging.debug(f'Request URL calculated as: {prepped.url}')
 
         # Get the server response
         try:
-            string_result = urlopen(tmp, timeout=timeout).read().decode("utf-8")
-        except (socket.timeout, URLError):
-            try:
-                string_result = urlopen(tmp, timeout=timeout).read().decode("utf-8")
-            except (socket.timeout, URLError):
-                raise PysonicException("Request to subsonic server timed out twice.")
+            r = self.session.send(prepped, timeout=timeout)
+            r.raise_for_status()
+        except requests.HTTPError:
+            raise PysonicException("Request to subsonic server timed or failed three times in a row.")
 
         # Parse the XML
-        root = ETree.fromstring(string_result)
+        root = ETree.fromstring(r.text)
 
-        logging.debug(f'Got response from server. As text:\n{string_result}\n\nAs parsed XML:\n{root}')
+        logging.debug(f'Got response from server. As text:\n{r.text}\n\nAs parsed XML:\n{root}')
 
         # Make sure the result is valid
         if root.attrib['status'] != 'ok':
@@ -205,7 +201,7 @@ Scrobble: {str(self.scrobble)}
         # Don't add the server to our server list if it crashes out
         try:
             self.sub_request(timeout=2)
-        except (HTTPError, ValueError):
+        except (PysonicException, ValueError):
             self.online = False
             return
 
